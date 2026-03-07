@@ -1,0 +1,12 @@
+# Discord Bot
+discord.py>=2.3.0
+
+# ブラウザ自動化
+playwright>=1.40.0
+
+# HTTPリクエスト
+requests>=2.31.0
+
+# ユーティリティ
+python-dotenv>=1.0.0
+aiohttp>=3.9.0
