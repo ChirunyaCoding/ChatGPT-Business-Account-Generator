@@ -6,6 +6,7 @@ playwright>=1.40.0
 
 # HTTPリクエスト
 requests>=2.31.0
+tls-client>=1.0.0  # TLS Fingerprint模倣用
 
 # ユーティリティ
 python-dotenv>=1.0.0

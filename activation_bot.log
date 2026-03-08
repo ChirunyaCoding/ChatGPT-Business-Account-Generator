@@ -326,3 +326,39 @@ discord.app_commands.errors.CommandInvokeError: Command 'cancel_activation' rais
 2026-03-08 13:41:25,817 - __main__ - INFO - 新規ブラウザセッションを開始しました
 2026-03-08 13:41:28,349 - browser_automation - INFO - ページ移動: https://www.paypal.com/signin
 2026-03-08 13:41:28,362 - browser_automation - INFO - ページステルス対策を適用しました
+2026-03-08 13:54:41,966 - discord.client - INFO - logging in using static token
+2026-03-08 13:54:43,440 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 0f9390dbd9ff2da6035fc3746280893e).
+2026-03-08 13:54:45,442 - __main__ - INFO - Activation Botがログインしました: ChatGPT_Account_Generator (1479805997160857811)
+2026-03-08 13:54:45,729 - __main__ - INFO - スラッシュコマンドを同期しました: 5個
+2026-03-08 13:55:53,411 - discord.client - INFO - logging in using static token
+2026-03-08 13:55:54,489 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: f208aa3931e9c1e03d916701de135198).
+2026-03-08 13:55:56,491 - __main__ - INFO - Activation Botがログインしました: ChatGPT_Account_Generator (1479805997160857811)
+2026-03-08 13:55:56,839 - __main__ - INFO - スラッシュコマンドを同期しました: 5個
+2026-03-08 13:56:29,515 - browser_automation - INFO - 拡張機能は無効化されています。外部VPNアプリケーションを使用してください。
+2026-03-08 13:56:29,515 - browser_automation - INFO - 永続的コンテキストを使用します: I:\Programming\PF\2026\3\ChatGPT Business Account Generator\.chrome_user_data
+2026-03-08 13:56:29,515 - browser_automation - INFO - 注意: 永続的コンテキストではstorage_stateは使用できません（ユーザーデータディレクトリで代替）
+2026-03-08 13:56:29,932 - browser_automation - INFO - 永続的ブラウザコンテキストを作成しました
+2026-03-08 13:56:29,932 - browser_automation - INFO - 既存のページを再利用します
+2026-03-08 13:56:30,017 - browser_automation - INFO - ステルス対策スクリプトを適用しました
+2026-03-08 13:56:30,018 - browser_automation - INFO - ブラウザを起動しました
+2026-03-08 13:56:30,018 - __main__ - INFO - 新規ブラウザセッションを開始しました
+2026-03-08 13:56:32,894 - browser_automation - INFO - ページ移動: https://www.paypal.com/signin
+2026-03-08 13:56:32,900 - browser_automation - INFO - ページステルス対策を適用しました
+2026-03-08 14:17:24,594 - discord.client - INFO - logging in using static token
+2026-03-08 14:17:25,992 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 10c112305bc339d859c097a479a83562).
+2026-03-08 14:17:27,999 - __main__ - INFO - Activation Botがログインしました: ChatGPT_Account_Generator (1479805997160857811)
+2026-03-08 14:17:42,904 - browser_automation - INFO - 拡張機能は無効化されています。外部VPNアプリケーションを使用してください。
+2026-03-08 14:17:42,905 - browser_automation - INFO - 永続的コンテキストを使用します: I:\Programming\PF\2026\3\ChatGPT Business Account Generator\.chrome_user_data
+2026-03-08 14:17:42,905 - browser_automation - INFO - 注意: 永続的コンテキストではstorage_stateは使用できません（ユーザーデータディレクトリで代替）
+2026-03-08 14:17:43,274 - browser_automation - INFO - 永続的ブラウザコンテキストを作成しました
+2026-03-08 14:17:43,274 - browser_automation - INFO - 既存のページを再利用します
+2026-03-08 14:17:43,323 - browser_automation - INFO - ステルス対策スクリプトを適用しました
+2026-03-08 14:17:43,324 - browser_automation - INFO - ブラウザを起動しました
+2026-03-08 14:17:43,324 - __main__ - INFO - 新規ブラウザセッションを開始しました
+2026-03-08 14:17:46,446 - browser_automation - INFO - ページ移動: https://www.paypal.com/signin
+2026-03-08 14:17:46,456 - browser_automation - INFO - ページステルス対策を適用しました
+2026-03-08 14:18:20,944 - __main__ - INFO - スラッシュコマンドを同期しました: 5個
+2026-03-08 14:21:38,972 - discord.client - INFO - logging in using static token
+2026-03-08 14:21:40,214 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 85be7302bdd03d3e9d449b94f4e6741b).
+2026-03-08 14:21:42,225 - __main__ - INFO - Activation Botがログインしました: ChatGPT_Account_Generator (1479805997160857811)
+2026-03-08 14:21:42,614 - __main__ - INFO - スラッシュコマンドを同期しました: 5個

@@ -64,8 +64,19 @@ class ChatGPTSignupAutomation:
             if not await self.browser.navigate_to(config.CHATGPT_SIGNUP_URL):
                 return SignupResult(success=False, error="ページアクセス失敗")
             
-            # 3. メールアドレス入力
-            logger.info("=== ステップ3: メールアドレス入力 ===")
+            # 3. Cloudflare Turnstile対策（CapSolver自動解決）
+            logger.info("=== ステップ3: Cloudflare Turnstileチェック ===")
+            turnstile_result = await self.browser.handle_turnstile_if_present(
+                auto_solve=True,      # CapSolverで自動解決
+                wait_for_manual=True   # 失敗時は手動待機
+            )
+            
+            if not turnstile_result:
+                logger.error("Turnstile処理に失敗しました")
+                # 続行を試みる（場合によっては通過している）
+            
+            # 4. メールアドレス入力
+            logger.info("=== ステップ4: メールアドレス入力 ===")
             if not await self.browser.fill_input(
                 'input#email[placeholder*="メール"]',
                 self.email,
@@ -78,23 +89,23 @@ class ChatGPTSignupAutomation:
                     by="placeholder"
                 )
             
-            # 4. 「Business プランをはじめる」ボタンをクリック
-            logger.info("=== ステップ4: Business プランをはじめるボタン ===")
+            # 5. 「Business プランをはじめる」ボタンをクリック
+            logger.info("=== ステップ5: Business プランをはじめるボタン ===")
             await self.browser.click_element(
                 "Business プランをはじめる",
                 by="text"
             )
             
-            # 5. パスワード入力
-            logger.info("=== ステップ5: パスワード入力 ===")
+            # 6. パスワード入力
+            logger.info("=== ステップ6: パスワード入力 ===")
             await self.browser.fill_input(
                 'input#_r_4_-new-password',
                 self.password,
                 by="css"
             )
             
-            # 6. Continueボタン押下とエラーチェック（不明なエラーがなくなるまで繰り返す）
-            logger.info("=== ステップ6: Continueボタン押下とエラーチェック ===")
+            # 7. Continueボタン押下とエラーチェック（不明なエラーがなくなるまで繰り返す）
+            logger.info("=== ステップ7: Continueボタン押下とエラーチェック ===")
             max_error_retries = 10
             error_retry = 0
             
@@ -159,7 +170,7 @@ class ChatGPTSignupAutomation:
             await asyncio.sleep(10)
             
             # 7. 検証コード待機と入力（非同期自動取得）
-            logger.info("=== ステップ7: 検証コード（非同期自動取得） ===")
+            logger.info("=== ステップ8: 検証コード（非同期自動取得） ===")
             
             # 検証コードを非同期で取得
             import concurrent.futures
@@ -207,7 +218,7 @@ class ChatGPTSignupAutomation:
                     )
             
             # 8. 名前入力
-            logger.info("=== ステップ8: 名前入力 ===")
+            logger.info("=== ステップ9: 名前入力 ===")
             await self.browser.fill_input(
                 'input#_r_h_-name',
                 "User",
@@ -215,18 +226,18 @@ class ChatGPTSignupAutomation:
             )
             
             # 9. 生年月日設定（年を2000に）
-            logger.info("=== ステップ9: 生年月日設定 ===")
+            logger.info("=== ステップ10: 生年月日設定 ===")
             await self.browser.set_birthday_year("2000")
             
             # 10. アカウントの作成を完了するボタン
-            logger.info("=== ステップ10: アカウント作成完了 ===")
+            logger.info("=== ステップ11: アカウント作成完了 ===")
             await self.browser.click_element(
                 'button[data-dd-action-name="Continue"]',
                 by="css"
             )
             
             # 11. キャンセルボタン → 指定URLに遷移
-            logger.info("=== ステップ11: キャンセル → 無料オファーページへ遷移 ===")
+            logger.info("=== ステップ12: キャンセル → 無料オファーページへ遷移 ===")
             await self.browser.click_element(
                 "キャンセルする",
                 by="text"
@@ -261,7 +272,7 @@ class ChatGPTSignupAutomation:
                 )
             
             # 12. 無料オファーページでボタンを探してクリック
-            logger.info("=== ステップ12: 無料オファー ===")
+            logger.info("=== ステップ13: 無料オファー ===")
             await self.browser.click_element(
                 'button[data-testid="select-plan-button-teams-create"]',
                 by="css"
@@ -272,14 +283,14 @@ class ChatGPTSignupAutomation:
             await asyncio.sleep(30)
             
             # 18. PayPalタブ（要素が見つかるまで無限待機）
-            logger.info("=== ステップ13: PayPal選択 ===")
+            logger.info("=== ステップ14: PayPal選択 ===")
             await self.browser.click_element(
                 'button[data-testid="paypal"]',
                 by="css"
             )
             
             # 19. 請求先住所入力
-            logger.info("=== ステップ14: 請求先住所 ===")
+            logger.info("=== ステップ15: 請求先住所 ===")
             await self.browser.fill_input(
                 'input#billingAddress-nameInput',
                 config.BILLING_INFO["name"],
@@ -328,14 +339,14 @@ class ChatGPTSignupAutomation:
             )
             
             # サブスクリプション登録
-            logger.info("=== ステップ15: サブスクリプション登録 ===")
+            logger.info("=== ステップ16: サブスクリプション登録 ===")
             await self.browser.click_element(
                 'button[type="submit"]',
                 by="css"
             )
             
             # 20. PayPal支払い処理（ログイン画面が表示された場合は自動入力）
-            logger.info("=== ステップ16: PayPal支払い ===")
+            logger.info("=== ステップ17: PayPal支払い ===")
             
             # PayPalログイン画面が表示されたかチェック
             await asyncio.sleep(3)
@@ -381,7 +392,7 @@ class ChatGPTSignupAutomation:
                 logger.info("PayPalログイン画面は表示されていません。既にログイン済みです。")
             
             # 17. PayPal同意（5秒おきに5回リトライ）
-            logger.info("=== ステップ17: PayPal同意 ===")
+            logger.info("=== ステップ18: PayPal同意 ===")
             consent_clicked = False
             for retry in range(5):
                 consent_clicked = await self.browser.click_element(
@@ -400,7 +411,7 @@ class ChatGPTSignupAutomation:
                 logger.warning("ステップ17のボタンが見つかりませんでした。ステップ18に進みます。")
             
             # 18. ワークスペース名
-            logger.info("=== ステップ18: ワークスペース名 ===")
+            logger.info("=== ステップ20: ワークスペース名入力 ===")
             await self.browser.click_element(
                 "続ける",
                 by="text"
@@ -426,7 +437,7 @@ class ChatGPTSignupAutomation:
                 )
             
             # 20. サブスクリプションキャンセル処理
-            logger.info("=== ステップ20: サブスクリプションキャンセル処理 ===")
+            logger.info("=== ステップ21: サブスクリプションキャンセル処理 ===")
             
             # 20-1. 請求ページに移動
             logger.info("=== ステップ20-1: 請求ページに移動 ===")
@@ -486,7 +497,7 @@ class ChatGPTSignupAutomation:
                 logger.warning("キャンセル完了メッセージが検出されませんでした")
             
             # 21. ChatGPTホームに移動して完了
-            logger.info("=== ステップ21: ChatGPTホームに移動 ===")
+            logger.info("=== ステップ22: ChatGPTホームに移動 ===")
             await self.browser.navigate_to("https://chatgpt.com/")
             await asyncio.sleep(3)
             

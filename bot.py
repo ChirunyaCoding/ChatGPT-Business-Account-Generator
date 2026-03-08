@@ -337,108 +337,87 @@ async def generate_command(interaction: discord.Interaction, mode: app_commands.
 
 
 # スラッシュコマンド: /paypal
-@bot.tree.command(name="paypal", description="PayPalにログインします（手動入力後、自動でログイン）")
+@bot.tree.command(name="paypal", description="PayPalに手動でログインします")
 async def paypal_login_command(interaction: discord.Interaction):
     """
     /paypal スラッシュコマンド
-    PayPalログイン（手動入力→自動ログイン）
+    PayPal手動ログイン - 通常のChromeを開いて手動でログイン
     """
     user_id = interaction.user.id
     
-    # 応答を遅延
-    await interaction.response.defer(thinking=True)
+    # 埋め込みメッセージを作成
+    embed = discord.Embed(
+        title="🔐 PayPal手動ログイン",
+        description="PayPalのセキュリティ対策のため、手動でログインしてください。",
+        color=discord.Color.blue()
+    )
     
-    # セッション取得または作成
-    if user_id not in active_sessions:
-        session = UserSession(user_id, interaction.channel)
-        active_sessions[user_id] = session
-    else:
-        session = active_sessions[user_id]
+    embed.add_field(
+        name="手順1",
+        value="通常のChromeブラウザを開く\n(Windowsキー → 「Chrome」と入力して開く)",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="手順2",
+        value="アドレスバーに以下を入力:\n```https://www.paypal.com/signin```",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="手順3",
+        value="メールアドレスとパスワードを入力してログイン\n「ログインしたままにする」にチェックを入れる",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="手順4",
+        value="ログインが完了したら、このメッセージの ✅ を押してください",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="💡 ヒント",
+        value="ログイン状態はCookieに保存されます。次回以降は `/generate` コマンドで自動的にスキップされます。",
+        inline=False
+    )
+    
+    # メッセージを送信
+    await interaction.response.send_message(embed=embed)
+    
+    # リアクションを追加
+    login_msg = await interaction.original_response()
+    await login_msg.add_reaction("✅")
+    
+    # リアクションを待機
+    def check(reaction, user):
+        return (
+            user.id == user_id 
+            and str(reaction.emoji) == "✅" 
+            and reaction.message.id == login_msg.id
+        )
     
     try:
-        # ブラウザ起動
-        await interaction.followup.send("🌐 ブラウザを起動中...")
-        if not await session.start_browser():
-            await interaction.followup.send("❌ ブラウザの起動に失敗しました。")
-            return
-        
-        await interaction.followup.send("✅ ブラウザを起動しました")
-        
-        # PayPalログインページを開く
-        await interaction.followup.send("🔌 PayPalログインページを開いています...")
-        await session.browser.navigate_to("https://www.paypal.com/signin")
-        
-        # ユーザーに手動入力を依頼
-        embed = discord.Embed(
-            title="🔐 PayPalログイン",
-            description="**手動で以下の情報を入力してください：**\n\n1. メールアドレス\n2. パスワード（または「Try another way」→パスワード）\n\n入力が完了したら、下の ✅ を押してください。",
-            color=discord.Color.blue()
+        reaction, user = await bot.wait_for(
+            "reaction_add", 
+            timeout=600.0,  # 10分
+            check=check
         )
-        embed.add_field(
-            name="注意",
-            value="入力後は必ずこのメッセージの ✅ を押してください。\n自動でログインボタンが押されます。",
-            inline=False
-        )
-        login_msg = await interaction.followup.send(embed=embed)
-        await login_msg.add_reaction("✅")
         
-        # リアクションを待機
-        def check(reaction, user):
-            return (
-                user.id == user_id 
-                and str(reaction.emoji) == "✅" 
-                and reaction.message.id == login_msg.id
-            )
-        
-        try:
-            reaction, user = await bot.wait_for(
-                "reaction_add", 
-                timeout=300.0,
-                check=check
-            )
-        except asyncio.TimeoutError:
-            await interaction.followup.send("⏰ タイムアウトしました。")
-            return
-        
-        # 自動でログインボタンをクリック
-        await interaction.followup.send("🤖 ログインボタンを自動で押します...")
-        
-        # 複数の可能性のあるセレクタを試す
-        login_selectors = [
-            'button[id*="btnLogin"]',
-            'button[type="submit"]',
-            'button:has-text("Log In")',
-            'button:has-text("ログイン")',
-            '#login',
-            'button[name="login"]'
-        ]
-        
-        clicked = False
-        for selector in login_selectors:
-            try:
-                await session.browser.click_element(selector, by="css", wait_until_found=False)
-                clicked = True
-                logger.info(f"ログインボタンをクリックしました: {selector}")
-                break
-            except:
-                continue
-        
-        if clicked:
-            await interaction.followup.send("✅ ログインボタンを押しました。\nログインが完了するまでお待ちください...")
-            await asyncio.sleep(5)
-            
-            # ログイン状態を保存
-            session.paypal_logged_in = True
-            if user_id in active_sessions:
-                active_sessions[user_id].paypal_logged_in = True
-            
-            await interaction.followup.send("✅ PayPalログイン処理を完了しました。\n次回の `/generate` ではログインがスキップされます。")
+        # セッション取得または作成
+        if user_id not in active_sessions:
+            session = UserSession(user_id, interaction.channel)
+            active_sessions[user_id] = session
         else:
-            await interaction.followup.send("⚠️ ログインボタンが見つかりませんでした。\n手動でログインボタンを押してください。")
+            session = active_sessions[user_id]
         
-    except Exception as e:
-        logger.exception("PayPalログインでエラー")
-        await interaction.followup.send(f"❌ エラーが発生しました: {str(e)}")
+        # ログイン済みフラグを設定
+        session.paypal_logged_in = True
+        
+        await interaction.followup.send("✅ PayPalログインを確認しました！\n次回の `/generate` ではログインがスキップされます。")
+        
+    except asyncio.TimeoutError:
+        await interaction.followup.send("⏰ タイムアウトしました。\n手動でログインを完了させてください。")
 
 
 # スラッシュコマンド: /generate

@@ -12,6 +12,8 @@ from pathlib import Path
 from playwright.async_api import async_playwright, Page, Browser, BrowserContext, Locator
 
 import config
+from cloudflare_solver import CloudflareSolver
+from capsolver_client import CapSolverClient
 
 logger = logging.getLogger(__name__)
 
@@ -206,14 +208,25 @@ class BrowserAutomation:
         self.playwright = None
         self.extension_installed = False
         
-    async def start(self, install_extension: bool = True, use_persistent_context: bool = True) -> None:
+    async def start(self, install_extension: bool = True, use_persistent_context: bool = True, use_cf_clearance: bool = True) -> None:
         """
         ブラウザを起動
         
         Args:
             install_extension: 拡張機能をインストールするかどうか
             use_persistent_context: 永続的コンテキスト（ユーザーデータ保存）を使用するか
+            use_cf_clearance: cf_clearanceクッキーを事前に取得するか（Cloudflare対策）
         """
+        # Cloudflare対策: cf_clearanceを事前に取得（参考: https://note.com/akkey1729/n/n9f08a2b441f9）
+        self.cf_solver = CloudflareSolver()
+        if use_cf_clearance:
+            logger.info("Cloudflare対策: cf_clearanceを確認中...")
+            has_clearance = await self.cf_solver.ensure_clearance()
+            if has_clearance:
+                logger.info(f"cf_clearanceを取得しました: {self.cf_solver.cf_clearance[:30]}..." if self.cf_solver.cf_clearance else "保存済みクッキーを使用します")
+            else:
+                logger.warning("cf_clearanceを取得できませんでした。ブラウザ起動後に手動でTurnstileを突破してください。")
+        
         self.playwright = await async_playwright().start()
         
         # Chromeのパスを探す
@@ -299,6 +312,10 @@ class BrowserAutomation:
             
             self.page.set_default_timeout(config.DEFAULT_TIMEOUT)
             
+            # cf_clearanceクッキーを追加（Cloudflare対策）
+            if use_cf_clearance and self.cf_solver.cf_clearance:
+                await self._apply_cf_clearance()
+            
         else:
             # 従来の方法（非永続的コンテキスト）
             launch_options = {
@@ -321,7 +338,7 @@ class BrowserAutomation:
             # コンテキスト作成
             context_options = {
                 "viewport": {"width": 1920, "height": 1080},
-                "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                "user_agent": self.cf_solver.user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
             if storage_state:
                 context_options["storage_state"] = storage_state
@@ -333,6 +350,10 @@ class BrowserAutomation:
             self.page = await self.context.new_page()
             self.page.set_default_timeout(config.DEFAULT_TIMEOUT)
             logger.info("新規ページを作成しました")
+            
+            # cf_clearanceクッキーを追加（Cloudflare対策）
+            if use_cf_clearance and self.cf_solver.cf_clearance:
+                await self._apply_cf_clearance()
         
         # ステルス対策スクリプトを適用
         await self._apply_stealth_scripts()
@@ -346,6 +367,164 @@ class BrowserAutomation:
         
         logger.info("ブラウザを起動しました")
     
+    async def _apply_cf_clearance(self) -> None:
+        """
+        cf_clearanceクッキーをブラウザに適用（Cloudflare対策）
+        参考: https://note.com/akkey1729/n/n9f08a2b441f9
+        """
+        try:
+            if not self.cf_solver.cf_clearance:
+                return
+            
+            # chatgpt.comドメイン用のクッキーを設定
+            await self.context.add_cookies([{
+                "name": "cf_clearance",
+                "value": self.cf_solver.cf_clearance,
+                "domain": ".chatgpt.com",
+                "path": "/",
+                "httpOnly": True,
+                "secure": True,
+                "sameSite": "None"
+            }])
+            
+            logger.info("cf_clearanceクッキーをブラウザに設定しました")
+            
+        except Exception as e:
+            logger.warning(f"cf_clearance適用に失敗しました: {e}")
+    
+    async def solve_turnstile_with_capsolver(
+        self,
+        website_url: str = "https://chatgpt.com",
+        website_key: str = "0x4AAAAAAADnPIDROrmt1Wwj"
+    ) -> Optional[str]:
+        """
+        CapSolverでCloudflare Turnstileを自動解決（有料サービス）
+        料金: 約0.12円〜0.30円/回
+        
+        Args:
+            website_url: 対象サイトURL
+            website_key: Turnstileのsitekey
+            
+        Returns:
+            取得したトークン、失敗時はNone
+        """
+        if not config.CAPSOLVER_API_KEY:
+            logger.error("CapSolver APIキーが設定されていません")
+            return None
+        
+        logger.info("🤖 CapSolver: Turnstile自動解決を開始します...")
+        
+        async with CapSolverClient(config.CAPSOLVER_API_KEY) as client:
+            result = await client.solve_turnstile(website_url, website_key)
+            
+            if result and result.get("token"):
+                token = result["token"]
+                logger.info(f"✅ CapSolver: Turnstile解決成功！ Token: {token[:30]}...")
+                
+                # 取得したUser-Agentを保存（一致させるため）
+                if result.get("user_agent"):
+                    self.cf_solver.user_agent = result["user_agent"]
+                    logger.info(f"User-Agentを同期: {result['user_agent'][:50]}...")
+                
+                # cf_clearanceも取得できていれば設定
+                if result.get("cf_clearance"):
+                    self.cf_solver.cf_clearance = result["cf_clearance"]
+                    await self._apply_cf_clearance()
+                
+                return token
+            else:
+                logger.error("❌ CapSolver: Turnstile解決に失敗しました")
+                return None
+    
+    async def handle_turnstile_if_present(
+        self,
+        auto_solve: bool = True,
+        wait_for_manual: bool = True
+    ) -> bool:
+        """
+        Turnstileが表示された場合の処理
+        
+        Args:
+            auto_solve: CapSolverで自動解決を試みる
+            wait_for_manual: 自動解決失敗時に手動待機する
+            
+        Returns:
+            処理が成功したかどうか
+        """
+        # Turnstile検出
+        turnstile_selectors = [
+            'iframe[src*="challenges.cloudflare.com"][src*="turnstile"]',
+            'iframe[id^="cf-chl-widget-"]',
+            'input[name="cf-turnstile-response"]',
+        ]
+        
+        turnstile_present = False
+        for selector in turnstile_selectors:
+            try:
+                locator = self.page.locator(selector).first
+                if await locator.is_visible(timeout=3000):
+                    turnstile_present = True
+                    logger.warning(f"🚨 Cloudflare Turnstileを検出: {selector}")
+                    break
+            except:
+                continue
+        
+        if not turnstile_present:
+            return True  # Turnstileがなければ成功とみなす
+        
+        logger.warning("=" * 60)
+        logger.warning("🚨 Cloudflare Turnstile セキュリティチャレンジを検出")
+        logger.warning("=" * 60)
+        
+        # 方法1: CapSolverで自動解決（有料だが確実）
+        if auto_solve and config.CAPSOLVER_API_KEY:
+            token = await self.solve_turnstile_with_capsolver()
+            if token:
+                # トークンをページに注入
+                try:
+                    await self.page.evaluate(f'''
+                        const input = document.querySelector('input[name="cf-turnstile-response"]');
+                        if (input) input.value = "{token}";
+                    ''')
+                    logger.info("✅ CapSolverトークンをページに注入しました")
+                    await asyncio.sleep(2)
+                    return True
+                except Exception as e:
+                    logger.warning(f"トークン注入に失敗: {e}")
+        
+        # 方法2: 手動でチェックボックスをクリックしてもらう
+        if wait_for_manual:
+            logger.warning("⚠️ 手動でのTurnstileチェックが必要です")
+            logger.warning("ブラウザでチェックボックスをクリックしてください...")
+            logger.warning("（30秒間待機します）")
+            
+            # 30秒待機して完了を確認
+            for i in range(30):
+                await asyncio.sleep(1)
+                
+                # Turnstileが消えたかチェック
+                iframe_gone = True
+                for selector in turnstile_selectors:
+                    try:
+                        locator = self.page.locator(selector).first
+                        if await locator.is_visible(timeout=1000):
+                            iframe_gone = False
+                            break
+                    except:
+                        continue
+                
+                if iframe_gone:
+                    logger.info("✅ Turnstileが消失しました（手動突破成功）")
+                    await asyncio.sleep(2)
+                    return True
+                
+                if i % 10 == 0 and i > 0:
+                    logger.info(f"手動チェック待機中... {i}秒経過")
+            
+            logger.error("❌ 手動チェック待機がタイムアウトしました")
+        
+        return False
+    
     async def _apply_stealth_scripts(self) -> None:
         """ステルス対策スクリプトを適用"""
         try:
@@ -354,55 +533,6 @@ class BrowserAutomation:
             logger.info("ステルス対策スクリプトを適用しました")
         except Exception as e:
             logger.warning(f"ステルススクリプト適用に失敗しました: {e}")
-    
-    async def _apply_page_stealth(self) -> None:
-        """ページ読み込み後のステルス対策を適用"""
-        try:
-            await self.page.evaluate("""
-                // window.chrome を再確認
-                if (!window.chrome) {
-                    window.chrome = { runtime: {} };
-                }
-                
-                // outerWidth/outerHeight を設定
-                Object.defineProperty(window, 'outerWidth', {
-                    get: () => window.innerWidth
-                });
-                Object.defineProperty(window, 'outerHeight', {
-                    get: () => window.innerHeight
-                });
-                
-                // devicePixelRatio を設定
-                Object.defineProperty(window, 'devicePixelRatio', {
-                    get: () => 1
-                });
-                
-                // screen プロパティを設定
-                Object.defineProperty(screen, 'availWidth', {
-                    get: () => 1920
-                });
-                Object.defineProperty(screen, 'availHeight', {
-                    get: () => 1040
-                });
-                Object.defineProperty(screen, 'width', {
-                    get: () => 1920
-                });
-                Object.defineProperty(screen, 'height', {
-                    get: () => 1080
-                });
-                Object.defineProperty(screen, 'colorDepth', {
-                    get: () => 24
-                });
-                Object.defineProperty(screen, 'pixelDepth', {
-                    get: () => 24
-                });
-                
-                // WebDriver 検出をさらに回避
-                delete navigator.__proto__.webdriver;
-            """)
-            logger.info("ページステルス対策を適用しました")
-        except Exception as e:
-            logger.warning(f"ページステルス対策適用に失敗しました: {e}")
     
     async def stop(self) -> None:
         """ブラウザを停止（セッション情報を保存）"""
@@ -749,10 +879,6 @@ class BrowserAutomation:
             # DOMが読み込まれた時点で進行（networkidleだとタイムアウトしやすい）
             await self.page.goto(url, wait_until="domcontentloaded")
             logger.info(f"ページ移動: {url}")
-            
-            # ページ読み込み後に追加のステルス対策を適用
-            await self._apply_page_stealth()
-            
             await self.sleep()
             return True
         except Exception as e:

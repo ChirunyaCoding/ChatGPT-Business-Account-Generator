@@ -14,6 +14,9 @@ load_project_env(BASE_DIR)
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "YOUR_DISCORD_BOT_TOKEN_HERE")
 COMMAND_PREFIX = "!"
 
+# CapSolver設定（Cloudflare Turnstile自動解決）
+CAPSOLVER_API_KEY = os.getenv("CAPSOLVER_API_KEY", "")
+
 # Chrome拡張機能設定（現在は無効）
 EXTENSION_PATH = r"C:\Users\sakip\AppData\Local\Google\Chrome Dev\User Data\Default\Extensions\lneaocagcijjdpkcabeanfpdbmapcjjg\2.2.0_0"
 EXTENSION_ID = "lneaocagcijjdpkcabeanfpdbmapcjjg"
