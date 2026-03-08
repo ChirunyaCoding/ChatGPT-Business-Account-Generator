@@ -16,6 +16,186 @@ import config
 logger = logging.getLogger(__name__)
 
 
+# ステルス対策用のJavaScript
+STEALTH_SCRIPTS = [
+    # navigator.webdriver を削除
+    """
+    Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined
+    });
+    """,
+    # Chrome runtime を完全に偽装
+    """
+    window.chrome = {
+        runtime: {
+            OnInstalledReason: {
+                CHROME_UPDATE: "chrome_update",
+                INSTALL: "install",
+                SHARED_MODULE_UPDATE: "shared_module_update",
+                UPDATE: "update"
+            },
+            OnRestartRequiredReason: {
+                APP_UPDATE: "app_update",
+                OS_UPDATE: "os_update",
+                PERIODIC: "periodic"
+            },
+            PlatformArch: {
+                ARM: "arm",
+                ARM64: "arm64",
+                MIPS: "mips",
+                MIPS64: "mips64",
+                X86_32: "x86-32",
+                X86_64: "x86-64"
+            },
+            PlatformNaclArch: {
+                ARM: "arm",
+                MIPS: "mips",
+                MIPS64: "mips64",
+                MIPS64EL: "mips64el",
+                MIPSEL: "mipsel",
+                X86_32: "x86-32",
+                X86_64: "x86-64"
+            },
+            PlatformOs: {
+                ANDROID: "android",
+                CROS: "cros",
+                LINUX: "linux",
+                MAC: "mac",
+                OPENBSD: "openbsd",
+                WIN: "win"
+            },
+            RequestUpdateCheckStatus: {
+                NO_UPDATE: "no_update",
+                THROTTLED: "throttled",
+                UPDATE_AVAILABLE: "update_available"
+            }
+        }
+    };
+    """,
+    # Permissions API を偽装
+    """
+    const originalQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (parameters) => (
+        parameters.name === 'notifications' ?
+            Promise.resolve({ state: Notification.permission }) :
+            originalQuery(parameters)
+    );
+    """,
+    # Pluginsを偽装（よりリアルに）
+    """
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => {
+            return [
+                {
+                    0: {
+                        type: "application/x-google-chrome-pdf",
+                        suffixes: "pdf",
+                        description: "Portable Document Format",
+                        enabledPlugin: Plugin
+                    },
+                    description: "Portable Document Format",
+                    filename: "internal-pdf-viewer",
+                    length: 1,
+                    name: "Chrome PDF Plugin"
+                },
+                {
+                    0: {
+                        type: "application/pdf",
+                        suffixes: "pdf",
+                        description: "",
+                        enabledPlugin: Plugin
+                    },
+                    description: "Portable Document Format plugin",
+                    filename: "internal-pdf-viewer2",
+                    length: 1,
+                    name: "Chrome PDF Viewer"
+                },
+                {
+                    0: {
+                        type: "application/x-nacl",
+                        suffixes: "",
+                        description: "",
+                        enabledPlugin: Plugin
+                    },
+                    1: {
+                        type: "application/x-pnacl",
+                        suffixes: "",
+                        description: "",
+                        enabledPlugin: Plugin
+                    },
+                    description: "",
+                    filename: "internal-nacl-plugin",
+                    length: 2,
+                    name: "Native Client"
+                }
+            ];
+        }
+    });
+    """,
+    # Languagesを偽装
+    """
+    Object.defineProperty(navigator, 'languages', {
+        get: () => ['ja-JP', 'ja', 'en-US', 'en']
+    });
+    """,
+    # WebGL vendor/renderer を偽装
+    """
+    const getParameter = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(parameter) {
+        if (parameter === 37445) {
+            return 'Intel Inc.';
+        }
+        if (parameter === 37446) {
+            return 'Intel Iris OpenGL Engine';
+        }
+        return getParameter(parameter);
+    };
+    """,
+    # Notification API を偽装
+    """
+    if (!window.Notification) {
+        window.Notification = {
+            permission: "default",
+            requestPermission: function(callback) {
+                if (callback) callback("default");
+                return Promise.resolve("default");
+            }
+        };
+    }
+    """,
+    # deviceMemory を偽装
+    """
+    Object.defineProperty(navigator, 'deviceMemory', {
+        get: () => 8
+    });
+    """,
+    # hardwareConcurrency を偽装
+    """
+    Object.defineProperty(navigator, 'hardwareConcurrency', {
+        get: () => 4
+    });
+    """,
+    # maxTouchPoints を偽装
+    """
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+        get: () => 0
+    });
+    """,
+    # PDF viewer enabled を偽装
+    """
+    Object.defineProperty(navigator, 'pdfViewerEnabled', {
+        get: () => true
+    });
+    """,
+    # CookieEnabled を偽装
+    """
+    Object.defineProperty(navigator, 'cookieEnabled', {
+        get: () => true
+    });
+    """,
+]
+
+
 class BrowserAutomation:
     """ブラウザ自動化クラス"""
     
@@ -26,12 +206,13 @@ class BrowserAutomation:
         self.playwright = None
         self.extension_installed = False
         
-    async def start(self, install_extension: bool = True) -> None:
+    async def start(self, install_extension: bool = True, use_persistent_context: bool = True) -> None:
         """
         ブラウザを起動
         
         Args:
             install_extension: 拡張機能をインストールするかどうか
+            use_persistent_context: 永続的コンテキスト（ユーザーデータ保存）を使用するか
         """
         self.playwright = await async_playwright().start()
         
@@ -57,31 +238,87 @@ class BrowserAutomation:
             "--no-default-browser-check",
             "--disable-webauthn",  # WebAuthn無効化（パスキー無効化）
             "--disable-features=WebAuthentication",  # Web認証無効化
+            # ステルス対策追加
+            "--disable-blink-features=AutomationControlled",
+            "--disable-dev-shm-usage",
+            "--disable-setuid-sandbox",
+            "--no-sandbox",
+            "--disable-accelerated-2d-canvas",
+            "--disable-gpu",
+            "--window-size=1920,1080",
+            "--start-maximized",
+            "--disable-infobars",
+            "--disable-background-timer-throttling",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-renderer-backgrounding",
+            "--disable-features=TranslateUI",
+            "--disable-component-extensions-with-background-pages",
         ]
         
         # 拡張機能は無効化（外部VPNアプリケーションを使用）
         logger.info("拡張機能は無効化されています。外部VPNアプリケーションを使用してください。")
         
-        # ブラウザを起動（デフォルト方式）
-        launch_options = {
-            "headless": config.HEADLESS,
-            "args": browser_args,
-            "slow_mo": config.SLOW_MO,
-        }
-        
-        if chrome_path:
-            launch_options["executable_path"] = chrome_path
-        
-        self.browser = await self.playwright.chromium.launch(**launch_options)
-        
-        # 前回のセッション情報を読み込み（永続化）
-        storage_state = None
-        if config.STORAGE_STATE_PATH.exists():
-            storage_state = str(config.STORAGE_STATE_PATH)
-            logger.info(f"前回のブラウザセッションを読み込みます: {storage_state}")
-        
-        # コンテキスト作成（既存のコンテキストがなければ）
-        if self.context is None:
+        # 永続的コンテキストを使用（既存のChromeプロファイルを模倣）
+        if use_persistent_context:
+            # ユーザーデータディレクトリを設定
+            user_data_dir = Path(__file__).parent / ".chrome_user_data"
+            user_data_dir.mkdir(exist_ok=True)
+            
+            logger.info(f"永続的コンテキストを使用します: {user_data_dir}")
+            logger.info("注意: 永続的コンテキストではstorage_stateは使用できません（ユーザーデータディレクトリで代替）")
+            
+            # persistent context を起動
+            # launch_persistent_context は storage_state を受け取らない
+            context_options = {
+                "headless": config.HEADLESS,
+                "args": browser_args,
+                "slow_mo": config.SLOW_MO,
+                "viewport": {"width": 1920, "height": 1080},
+                "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            }
+            
+            if chrome_path:
+                context_options["executable_path"] = chrome_path
+            
+            # persistent context を作成（browserとcontextを同時に作成）
+            self.context = await self.playwright.chromium.launch_persistent_context(
+                str(user_data_dir),
+                **context_options
+            )
+            self.browser = self.context.browser
+            logger.info("永続的ブラウザコンテキストを作成しました")
+            
+            # 既存のページを取得、または新規作成
+            pages = self.context.pages
+            if pages:
+                self.page = pages[0]
+                logger.info("既存のページを再利用します")
+            else:
+                self.page = await self.context.new_page()
+                logger.info("新規ページを作成しました")
+            
+            self.page.set_default_timeout(config.DEFAULT_TIMEOUT)
+            
+        else:
+            # 従来の方法（非永続的コンテキスト）
+            launch_options = {
+                "headless": config.HEADLESS,
+                "args": browser_args,
+                "slow_mo": config.SLOW_MO,
+            }
+            
+            if chrome_path:
+                launch_options["executable_path"] = chrome_path
+            
+            self.browser = await self.playwright.chromium.launch(**launch_options)
+            
+            # 前回のセッション情報を読み込み（永続化）
+            storage_state = None
+            if config.STORAGE_STATE_PATH.exists():
+                storage_state = str(config.STORAGE_STATE_PATH)
+                logger.info(f"前回のブラウザセッションを読み込みます: {storage_state}")
+            
+            # コンテキスト作成
             context_options = {
                 "viewport": {"width": 1920, "height": 1080},
                 "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -91,16 +328,14 @@ class BrowserAutomation:
             
             self.context = await self.browser.new_context(**context_options)
             logger.info("新規ブラウザコンテキストを作成しました")
-        else:
-            logger.info("既存のブラウザコンテキストを再利用します")
-        
-        # ページ作成（既存のページがなければ）
-        if self.page is None or self.page.is_closed():
+            
+            # ページ作成
             self.page = await self.context.new_page()
             self.page.set_default_timeout(config.DEFAULT_TIMEOUT)
             logger.info("新規ページを作成しました")
-        else:
-            logger.info("既存のページを再利用します")
+        
+        # ステルス対策スクリプトを適用
+        await self._apply_stealth_scripts()
         
         # 拡張機能インストール後にフラグファイルを作成
         if self.extension_installed:
@@ -110,6 +345,64 @@ class BrowserAutomation:
             await asyncio.sleep(5)
         
         logger.info("ブラウザを起動しました")
+    
+    async def _apply_stealth_scripts(self) -> None:
+        """ステルス対策スクリプトを適用"""
+        try:
+            for script in STEALTH_SCRIPTS:
+                await self.page.add_init_script(script)
+            logger.info("ステルス対策スクリプトを適用しました")
+        except Exception as e:
+            logger.warning(f"ステルススクリプト適用に失敗しました: {e}")
+    
+    async def _apply_page_stealth(self) -> None:
+        """ページ読み込み後のステルス対策を適用"""
+        try:
+            await self.page.evaluate("""
+                // window.chrome を再確認
+                if (!window.chrome) {
+                    window.chrome = { runtime: {} };
+                }
+                
+                // outerWidth/outerHeight を設定
+                Object.defineProperty(window, 'outerWidth', {
+                    get: () => window.innerWidth
+                });
+                Object.defineProperty(window, 'outerHeight', {
+                    get: () => window.innerHeight
+                });
+                
+                // devicePixelRatio を設定
+                Object.defineProperty(window, 'devicePixelRatio', {
+                    get: () => 1
+                });
+                
+                // screen プロパティを設定
+                Object.defineProperty(screen, 'availWidth', {
+                    get: () => 1920
+                });
+                Object.defineProperty(screen, 'availHeight', {
+                    get: () => 1040
+                });
+                Object.defineProperty(screen, 'width', {
+                    get: () => 1920
+                });
+                Object.defineProperty(screen, 'height', {
+                    get: () => 1080
+                });
+                Object.defineProperty(screen, 'colorDepth', {
+                    get: () => 24
+                });
+                Object.defineProperty(screen, 'pixelDepth', {
+                    get: () => 24
+                });
+                
+                // WebDriver 検出をさらに回避
+                delete navigator.__proto__.webdriver;
+            """)
+            logger.info("ページステルス対策を適用しました")
+        except Exception as e:
+            logger.warning(f"ページステルス対策適用に失敗しました: {e}")
     
     async def stop(self) -> None:
         """ブラウザを停止（セッション情報を保存）"""
@@ -456,6 +749,10 @@ class BrowserAutomation:
             # DOMが読み込まれた時点で進行（networkidleだとタイムアウトしやすい）
             await self.page.goto(url, wait_until="domcontentloaded")
             logger.info(f"ページ移動: {url}")
+            
+            # ページ読み込み後に追加のステルス対策を適用
+            await self._apply_page_stealth()
+            
             await self.sleep()
             return True
         except Exception as e:

@@ -41,9 +41,12 @@ class ChatGPTSignupAutomation:
         self.email: Optional[str] = None
         self.password: Optional[str] = None
         
-    async def run_full_signup(self) -> SignupResult:
+    async def run_full_signup(self, mode: str = "1") -> SignupResult:
         """
         完全なサインアップフローを実行
+        
+        Args:
+            mode: "1" = 無料オファーあり（従来の動作）, "2" = 無料オファーなし（ステップ11で終了）
         
         Returns:
             SignupResult
@@ -233,6 +236,30 @@ class ChatGPTSignupAutomation:
             await self.browser.navigate_to("https://chatgpt.com/#pricing")
             await asyncio.sleep(3)
             
+            # モード2の場合はここで終了（無料オファーなし）
+            if mode == "2":
+                logger.info("=== モード2: 無料オファーなしで終了 ===")
+                await self.browser.navigate_to("https://chatgpt.com/")
+                await asyncio.sleep(3)
+                
+                logger.info("=== サインアップ完了（モード2） ===")
+                
+                info_message = f"""
+🎉 **ChatGPT Teamサインアップ完了（無料オファーなし）！**
+
+📧 **メールアドレス:** `{self.email}`
+🔑 **パスワード:** `{self.password}`
+
+無料オファーは適用されていません。
+"""
+                
+                return SignupResult(
+                    success=True,
+                    email=self.email,
+                    password=self.password,
+                    message=info_message
+                )
+            
             # 12. 無料オファーページでボタンを探してクリック
             logger.info("=== ステップ12: 無料オファー ===")
             await self.browser.click_element(
@@ -398,20 +425,81 @@ class ChatGPTSignupAutomation:
                     by="text"
                 )
             
-            # 20. ChatGPTホームに移動して完了
-            logger.info("=== ステップ20: ChatGPTホームに移動 ===")
+            # 20. サブスクリプションキャンセル処理
+            logger.info("=== ステップ20: サブスクリプションキャンセル処理 ===")
+            
+            # 20-1. 請求ページに移動
+            logger.info("=== ステップ20-1: 請求ページに移動 ===")
+            await self.browser.navigate_to("https://chatgpt.com/admin/billing")
+            await asyncio.sleep(3)
+            
+            # 20-2. 「プランの管理」ボタンをクリック
+            logger.info("=== ステップ20-2: プランの管理ボタンをクリック ===")
+            await self.browser.click_element(
+                'button#radix-_r_4b_',
+                by="css"
+            )
+            await asyncio.sleep(2)
+            
+            # 20-3. 「サブスクリプションをキャンセルする」をクリック
+            logger.info("=== ステップ20-3: サブスクリプションをキャンセルするをクリック ===")
+            await self.browser.click_element(
+                "サブスクリプションをキャンセルする",
+                by="text"
+            )
+            await asyncio.sleep(2)
+            
+            # 20-4. メールアドレスを入力（確認用）
+            logger.info("=== ステップ20-4: メールアドレスを入力（確認） ===")
+            await self.browser.fill_input(
+                'input#user-email',
+                self.email,
+                by="css"
+            )
+            await asyncio.sleep(1)
+            
+            # 20-5. 「サブスクリプションをキャンセルする」ボタンをクリック
+            logger.info("=== ステップ20-5: サブスクリプションをキャンセルするボタンをクリック ===")
+            await self.browser.click_element(
+                "サブスクリプションをキャンセルする",
+                by="text"
+            )
+            
+            # 20-6. キャンセル完了メッセージを待機
+            logger.info("=== ステップ20-6: キャンセル完了メッセージを待機 ===")
+            cancel_success = await self.browser.find_element_with_retry(
+                'h3:text("サブスクリプションは正常にキャンセルされました。")',
+                by="css",
+                max_retries=10,
+                retry_interval=2
+            )
+            
+            if cancel_success:
+                logger.info("サブスクリプションのキャンセルが完了しました")
+                # 完了ボタンをクリック
+                await self.browser.click_element(
+                    "完了",
+                    by="text"
+                )
+                await asyncio.sleep(2)
+            else:
+                logger.warning("キャンセル完了メッセージが検出されませんでした")
+            
+            # 21. ChatGPTホームに移動して完了
+            logger.info("=== ステップ21: ChatGPTホームに移動 ===")
             await self.browser.navigate_to("https://chatgpt.com/")
             await asyncio.sleep(3)
             
-            logger.info("=== サインアップ完了 ===")
+            logger.info("=== サインアップ・キャンセル処理完了 ===")
             
             # ユーザーに情報を送信
             info_message = f"""
-🎉 **ChatGPT Teamサインアップ完了！**
+🎉 **ChatGPT Teamサインアップ・キャンセル処理完了！**
 
 📧 **メールアドレス:** `{self.email}`
 🔑 **パスワード:** `{self.password}`
 🏢 **ワークスペース名:** {workspace_name or '未設定'}
+✅ **サブスクリプション:** キャンセル済み（請求サイクル終了まで利用可能）
 """
             
             return SignupResult(

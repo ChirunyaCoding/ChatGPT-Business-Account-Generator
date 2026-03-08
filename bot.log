@@ -4113,3 +4113,404 @@ Call log:
 2026-03-08 02:25:59,170 - browser_automation - INFO - クリック成功: 続ける
 2026-03-08 02:26:04,174 - chatgpt_signup - INFO - === ステップ20: サインアップ完了 ===
 2026-03-08 02:26:18,148 - chatgpt_signup - INFO - === サインアップ完了 ===
+2026-03-08 05:19:24,301 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2026-03-08 05:19:24,302 - discord.client - INFO - logging in using static token
+2026-03-08 05:19:25,329 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 53f977eb1e3e726f532fc8dae8114628).
+2026-03-08 05:19:27,352 - __main__ - INFO - Botがログインしました: ChatGPT_Account_Generator (1479805997160857811)
+2026-03-08 05:19:27,700 - __main__ - INFO - スラッシュコマンドを同期しました: 5個
+2026-03-08 05:29:15,851 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2026-03-08 05:29:15,851 - discord.client - INFO - logging in using static token
+2026-03-08 05:29:16,991 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 398df273ffb2bdd6e4f3a901952e0b84).
+2026-03-08 05:29:18,999 - __main__ - INFO - Botがログインしました: ChatGPT_Account_Generator (1479805997160857811)
+2026-03-08 05:29:19,428 - __main__ - INFO - スラッシュコマンドを同期しました: 5個
+2026-03-08 05:30:27,146 - browser_automation - INFO - 拡張機能は無効化されています。外部VPNアプリケーションを使用してください。
+2026-03-08 05:30:27,632 - browser_automation - INFO - 前回のブラウザセッションを読み込みます: /Users/kotohasaki/Documents/Programming/ChatGPT-Business-Account-Generator/.browser_storage_state.json
+2026-03-08 05:30:28,646 - browser_automation - INFO - 新規ブラウザコンテキストを作成しました
+2026-03-08 05:30:29,209 - browser_automation - INFO - 新規ページを作成しました
+2026-03-08 05:30:29,209 - browser_automation - INFO - ブラウザを起動しました
+2026-03-08 05:30:29,209 - __main__ - INFO - 新規ブラウザセッションを開始しました
+2026-03-08 05:30:32,720 - browser_automation - INFO - ページ移動: https://www.paypal.com/signin
+2026-03-08 05:31:33,658 - browser_automation - INFO - 要素が見つかりません。リトライ 2/5...
+2026-03-08 05:31:36,667 - browser_automation - INFO - 要素が見つかりません。リトライ 3/5...
+2026-03-08 05:31:39,676 - browser_automation - INFO - 要素が見つかりません。リトライ 4/5...
+2026-03-08 05:31:42,684 - browser_automation - INFO - 要素が見つかりません。リトライ 5/5...
+2026-03-08 05:31:45,692 - browser_automation - ERROR - 要素が見つかりませんでした: button[id*="btnLogin"] (by=css)
+2026-03-08 05:31:45,693 - __main__ - INFO - ログインボタンをクリックしました: button[id*="btnLogin"]
+2026-03-08 05:40:45,195 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2026-03-08 05:40:45,196 - discord.client - INFO - logging in using static token
+2026-03-08 05:40:46,621 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 5ec6677b83ba0b57d452b8911abe222f).
+2026-03-08 05:40:48,633 - __main__ - INFO - Botがログインしました: ChatGPT_Account_Generator (1479805997160857811)
+2026-03-08 05:40:49,052 - __main__ - INFO - スラッシュコマンドを同期しました: 5個
+2026-03-08 05:42:12,944 - browser_automation - INFO - 拡張機能は無効化されています。外部VPNアプリケーションを使用してください。
+2026-03-08 05:42:13,991 - browser_automation - INFO - 前回のブラウザセッションを読み込みます: /Users/kotohasaki/Documents/Programming/ChatGPT-Business-Account-Generator/.browser_storage_state.json
+2026-03-08 05:42:15,290 - browser_automation - INFO - 新規ブラウザコンテキストを作成しました
+2026-03-08 05:42:15,988 - browser_automation - INFO - 新規ページを作成しました
+2026-03-08 05:42:15,988 - browser_automation - INFO - ブラウザを起動しました
+2026-03-08 05:42:15,988 - __main__ - INFO - 新規ブラウザセッションを開始しました
+2026-03-08 05:42:18,912 - chatgpt_signup - INFO - === ステップ1: mail.tmアカウント作成 ===
+2026-03-08 05:42:24,063 - mail_tm_api - INFO - アカウント作成成功: goyu23kj88uf@dollicons.com
+2026-03-08 05:42:25,885 - chatgpt_signup - INFO - メールアドレス: goyu23kj88uf@dollicons.com
+2026-03-08 05:42:25,885 - chatgpt_signup - INFO - === ステップ2: ChatGPTサインアップページにアクセス ===
+2026-03-08 05:42:32,757 - browser_automation - INFO - ページ移動: https://chatgpt.com/team-sign-up?promo_campaign=team1dollar
+2026-03-08 05:42:37,759 - chatgpt_signup - INFO - === ステップ3: メールアドレス入力 ===
+2026-03-08 05:42:42,243 - discord.gateway - INFO - Shard ID None has successfully RESUMED session 5ec6677b83ba0b57d452b8911abe222f.
+2026-03-08 05:42:44,770 - browser_automation - INFO - 要素が見つかりません。待機中... (1回目): input#email[placeholder*="メール"]
+2026-03-08 05:42:46,572 - browser_automation - INFO - 要素が見つかりました: input#email[placeholder*="メール"] (by=css, 2回目)
+2026-03-08 05:42:49,609 - browser_automation - INFO - 入力成功: input#email[placeholder*="メール"] = goyu23kj88uf@dollico...
+2026-03-08 05:42:54,610 - chatgpt_signup - INFO - === ステップ4: Business プランをはじめるボタン ===
+2026-03-08 05:42:54,624 - browser_automation - INFO - 要素が見つかりました: Business プランをはじめる (by=text, 1回目)
+2026-03-08 05:42:56,213 - browser_automation - INFO - クリック成功: Business プランをはじめる
+2026-03-08 05:43:01,215 - chatgpt_signup - INFO - === ステップ5: パスワード入力 ===
+2026-03-08 05:43:06,224 - browser_automation - INFO - 要素が見つかりません。待機中... (1回目): input#_r_4_-new-password
+2026-03-08 05:43:09,058 - browser_automation - INFO - 要素が見つかりました: input#_r_4_-new-password (by=css, 2回目)
+2026-03-08 05:43:12,089 - browser_automation - INFO - 入力成功: input#_r_4_-new-password = rq#jN^9I%YmIL@2*...
+2026-03-08 05:43:17,092 - chatgpt_signup - INFO - === ステップ6: Continueボタン押下とエラーチェック ===
+2026-03-08 05:43:17,093 - chatgpt_signup - INFO - Continueボタンを押します（初回）
+2026-03-08 05:43:17,105 - browser_automation - INFO - 要素が見つかりました: button[type="submit"] (by=css, 1回目)
+2026-03-08 05:43:18,658 - browser_automation - INFO - クリック成功: button[type="submit"]
+2026-03-08 05:43:23,660 - chatgpt_signup - INFO - エラー表示を待機中（5秒）...
+2026-03-08 05:43:28,662 - chatgpt_signup - INFO - エラーチェックを実行中...
+2026-03-08 05:43:28,675 - chatgpt_signup - WARNING - 不明なエラーが検出されました(1/10)。リトライします。
+2026-03-08 05:43:28,682 - browser_automation - INFO - 要素が見つかりました: button[data-dd-action-name="Try again"] (by=css, 1回目)
+2026-03-08 05:43:31,042 - browser_automation - INFO - クリック成功: button[data-dd-action-name="Try again"]
+2026-03-08 05:43:36,067 - browser_automation - INFO - 要素が見つかりました: input#_r_4_-new-password (by=css, 1回目)
+2026-03-08 05:43:39,098 - browser_automation - INFO - 入力成功: input#_r_4_-new-password = rq#jN^9I%YmIL@2*...
+2026-03-08 05:43:44,099 - chatgpt_signup - INFO - Continueボタンを押します（リトライ 1/10）
+2026-03-08 05:43:44,103 - browser_automation - INFO - 要素が見つかりました: button[type="submit"] (by=css, 1回目)
+2026-03-08 05:43:45,642 - browser_automation - INFO - クリック成功: button[type="submit"]
+2026-03-08 05:43:50,644 - chatgpt_signup - INFO - エラー表示を待機中（5秒）...
+2026-03-08 05:43:55,646 - chatgpt_signup - INFO - エラーチェックを実行中...
+2026-03-08 05:43:55,666 - chatgpt_signup - INFO - エラーメッセージは表示されていますが、'不明なエラー'ではありません。
+2026-03-08 05:43:55,666 - chatgpt_signup - INFO - エラーは検出されませんでした。次のステップへ進みます。
+2026-03-08 05:43:55,667 - chatgpt_signup - INFO - === メール送信待機（10秒） ===
+2026-03-08 05:44:05,667 - chatgpt_signup - INFO - === ステップ7: 検証コード（非同期自動取得） ===
+2026-03-08 05:44:05,669 - mail_tm_api - INFO - 検証コードを待機中... (最大300秒)
+2026-03-08 05:44:12,183 - mail_tm_api - INFO - 検証コードを発見: 593350
+2026-03-08 05:44:12,183 - chatgpt_signup - INFO - 検証コードを自動取得しました: 593350
+2026-03-08 05:44:12,193 - browser_automation - INFO - 要素が見つかりました: input#_r_5_-code (by=css, 1回目)
+2026-03-08 05:44:15,222 - browser_automation - INFO - 入力成功: input#_r_5_-code = 593350...
+2026-03-08 05:44:20,239 - browser_automation - INFO - 要素が見つかりました: button[type="submit"] (by=css, 1回目)
+2026-03-08 05:44:21,788 - browser_automation - INFO - クリック成功: button[type="submit"]
+2026-03-08 05:44:26,790 - chatgpt_signup - INFO - === ステップ8: 名前入力 ===
+2026-03-08 05:44:26,795 - browser_automation - INFO - 要素が見つかりました: input#_r_h_-name (by=css, 1回目)
+2026-03-08 05:44:29,820 - browser_automation - INFO - 入力成功: input#_r_h_-name = User...
+2026-03-08 05:44:34,821 - chatgpt_signup - INFO - === ステップ9: 生年月日設定 ===
+2026-03-08 05:44:39,437 - browser_automation - INFO - 生年月日の年を設定: 2000
+2026-03-08 05:44:44,438 - chatgpt_signup - INFO - === ステップ10: アカウント作成完了 ===
+2026-03-08 05:44:44,448 - browser_automation - INFO - 要素が見つかりました: button[data-dd-action-name="Continue"] (by=css, 1回目)
+2026-03-08 05:44:46,013 - browser_automation - INFO - クリック成功: button[data-dd-action-name="Continue"]
+2026-03-08 05:44:51,015 - chatgpt_signup - INFO - === ステップ11: キャンセル → 無料オファーページへ遷移 ===
+2026-03-08 05:44:56,022 - browser_automation - INFO - 要素が見つかりません。待機中... (1回目): キャンセルする
+2026-03-08 05:44:58,829 - browser_automation - INFO - 要素が見つかりました: キャンセルする (by=text, 2回目)
+2026-03-08 05:45:00,406 - browser_automation - INFO - クリック成功: キャンセルする
+2026-03-08 05:45:06,929 - browser_automation - INFO - ページ移動: https://chatgpt.com/#pricing
+2026-03-08 05:45:14,932 - chatgpt_signup - INFO - === モード2: 無料オファーなしで終了 ===
+2026-03-08 05:45:18,354 - browser_automation - INFO - ページ移動: https://chatgpt.com/
+2026-03-08 05:45:26,357 - chatgpt_signup - INFO - === サインアップ完了（モード2） ===
+2026-03-08 05:49:00,665 - discord.client - ERROR - Attempting a reconnect in 0.21s
+Traceback (most recent call last):
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1532, in _create_direct_connection
+    hosts = await self._resolve_host(host, port, traces=traces)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1148, in _resolve_host
+    return await asyncio.shield(resolved_host_task)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1179, in _resolve_host_with_throttle
+    addrs = await self._resolver.resolve(host, port, family=self._family)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/resolver.py", line 40, in resolve
+    infos = await self._loop.getaddrinfo(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/base_events.py", line 863, in getaddrinfo
+    return await self.run_in_executor(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/socket.py", line 967, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 8] nodename nor servname provided, or not known
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/client.py", line 724, in connect
+    self.ws = await asyncio.wait_for(coro, timeout=60.0)
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/tasks.py", line 445, in wait_for
+    return fut.result()
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/gateway.py", line 383, in from_client
+    socket = await client.http.ws_connect(str(url))
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/http.py", line 566, in ws_connect
+    return await self.__session.ws_connect(url, **kwargs)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 1076, in _ws_connect
+    resp = await self.request(
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 779, in _request
+    resp = await handler(req)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 734, in _connect_and_send_request
+    conn = await self._connector.connect(
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 642, in connect
+    proto = await self._create_connection(req, traces, timeout)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1209, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1538, in _create_direct_connection
+    raise ClientConnectorDNSError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorDNSError: Cannot connect to host gateway-us-east1-d.discord.gg:443 ssl:default [nodename nor servname provided, or not known]
+2026-03-08 05:49:30,896 - discord.client - ERROR - Attempting a reconnect in 1.97s
+Traceback (most recent call last):
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1532, in _create_direct_connection
+    hosts = await self._resolve_host(host, port, traces=traces)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1148, in _resolve_host
+    return await asyncio.shield(resolved_host_task)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1179, in _resolve_host_with_throttle
+    addrs = await self._resolver.resolve(host, port, family=self._family)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/resolver.py", line 40, in resolve
+    infos = await self._loop.getaddrinfo(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/base_events.py", line 863, in getaddrinfo
+    return await self.run_in_executor(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/socket.py", line 967, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 8] nodename nor servname provided, or not known
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/client.py", line 724, in connect
+    self.ws = await asyncio.wait_for(coro, timeout=60.0)
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/tasks.py", line 445, in wait_for
+    return fut.result()
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/gateway.py", line 383, in from_client
+    socket = await client.http.ws_connect(str(url))
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/http.py", line 566, in ws_connect
+    return await self.__session.ws_connect(url, **kwargs)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 1076, in _ws_connect
+    resp = await self.request(
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 779, in _request
+    resp = await handler(req)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 734, in _connect_and_send_request
+    conn = await self._connector.connect(
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 642, in connect
+    proto = await self._create_connection(req, traces, timeout)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1209, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1538, in _create_direct_connection
+    raise ClientConnectorDNSError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorDNSError: Cannot connect to host gateway-us-east1-d.discord.gg:443 ssl:default [nodename nor servname provided, or not known]
+2026-03-08 05:50:02,916 - discord.client - ERROR - Attempting a reconnect in 2.12s
+Traceback (most recent call last):
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1532, in _create_direct_connection
+    hosts = await self._resolve_host(host, port, traces=traces)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1148, in _resolve_host
+    return await asyncio.shield(resolved_host_task)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1179, in _resolve_host_with_throttle
+    addrs = await self._resolver.resolve(host, port, family=self._family)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/resolver.py", line 40, in resolve
+    infos = await self._loop.getaddrinfo(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/base_events.py", line 863, in getaddrinfo
+    return await self.run_in_executor(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/socket.py", line 967, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 8] nodename nor servname provided, or not known
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/client.py", line 724, in connect
+    self.ws = await asyncio.wait_for(coro, timeout=60.0)
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/tasks.py", line 445, in wait_for
+    return fut.result()
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/gateway.py", line 383, in from_client
+    socket = await client.http.ws_connect(str(url))
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/http.py", line 566, in ws_connect
+    return await self.__session.ws_connect(url, **kwargs)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 1076, in _ws_connect
+    resp = await self.request(
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 779, in _request
+    resp = await handler(req)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 734, in _connect_and_send_request
+    conn = await self._connector.connect(
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 642, in connect
+    proto = await self._create_connection(req, traces, timeout)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1209, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1538, in _create_direct_connection
+    raise ClientConnectorDNSError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorDNSError: Cannot connect to host gateway-us-east1-d.discord.gg:443 ssl:default [nodename nor servname provided, or not known]
+2026-03-08 05:50:35,175 - discord.client - ERROR - Attempting a reconnect in 3.28s
+Traceback (most recent call last):
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1532, in _create_direct_connection
+    hosts = await self._resolve_host(host, port, traces=traces)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1148, in _resolve_host
+    return await asyncio.shield(resolved_host_task)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1179, in _resolve_host_with_throttle
+    addrs = await self._resolver.resolve(host, port, family=self._family)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/resolver.py", line 40, in resolve
+    infos = await self._loop.getaddrinfo(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/base_events.py", line 863, in getaddrinfo
+    return await self.run_in_executor(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/socket.py", line 967, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 8] nodename nor servname provided, or not known
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/client.py", line 724, in connect
+    self.ws = await asyncio.wait_for(coro, timeout=60.0)
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/tasks.py", line 445, in wait_for
+    return fut.result()
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/gateway.py", line 383, in from_client
+    socket = await client.http.ws_connect(str(url))
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/http.py", line 566, in ws_connect
+    return await self.__session.ws_connect(url, **kwargs)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 1076, in _ws_connect
+    resp = await self.request(
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 779, in _request
+    resp = await handler(req)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 734, in _connect_and_send_request
+    conn = await self._connector.connect(
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 642, in connect
+    proto = await self._create_connection(req, traces, timeout)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1209, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1538, in _create_direct_connection
+    raise ClientConnectorDNSError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorDNSError: Cannot connect to host gateway-us-east1-d.discord.gg:443 ssl:default [nodename nor servname provided, or not known]
+2026-03-08 05:51:08,487 - discord.client - ERROR - Attempting a reconnect in 15.09s
+Traceback (most recent call last):
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1532, in _create_direct_connection
+    hosts = await self._resolve_host(host, port, traces=traces)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1148, in _resolve_host
+    return await asyncio.shield(resolved_host_task)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1179, in _resolve_host_with_throttle
+    addrs = await self._resolver.resolve(host, port, family=self._family)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/resolver.py", line 40, in resolve
+    infos = await self._loop.getaddrinfo(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/base_events.py", line 863, in getaddrinfo
+    return await self.run_in_executor(
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/socket.py", line 967, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+socket.gaierror: [Errno 8] nodename nor servname provided, or not known
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/client.py", line 724, in connect
+    self.ws = await asyncio.wait_for(coro, timeout=60.0)
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/tasks.py", line 445, in wait_for
+    return fut.result()
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/gateway.py", line 383, in from_client
+    socket = await client.http.ws_connect(str(url))
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/http.py", line 566, in ws_connect
+    return await self.__session.ws_connect(url, **kwargs)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 1076, in _ws_connect
+    resp = await self.request(
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 779, in _request
+    resp = await handler(req)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 734, in _connect_and_send_request
+    conn = await self._connector.connect(
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 642, in connect
+    proto = await self._create_connection(req, traces, timeout)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1209, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/connector.py", line 1538, in _create_direct_connection
+    raise ClientConnectorDNSError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorDNSError: Cannot connect to host gateway-us-east1-d.discord.gg:443 ssl:default [nodename nor servname provided, or not known]
+2026-03-08 06:02:07,719 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2026-03-08 06:02:07,720 - discord.client - INFO - logging in using static token
+2026-03-08 13:08:44,898 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2026-03-08 13:08:44,900 - discord.client - INFO - logging in using static token
+2026-03-08 13:08:46,009 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: c1303d153988fdc29be3107338aa6bf0).
+2026-03-08 13:08:48,014 - __main__ - INFO - Botがログインしました: ChatGPT_Account_Generator (1479805997160857811)
+2026-03-08 13:08:48,309 - __main__ - INFO - スラッシュコマンドを同期しました: 5個
+2026-03-08 13:08:52,686 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2026-03-08 13:08:52,687 - discord.client - INFO - logging in using static token
+2026-03-08 13:08:53,824 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: 3b4eda659e9fa4b847830141dc47d59f).
+2026-03-08 13:08:55,832 - __main__ - INFO - Botがログインしました: ChatGPT_Account_Generator (1479805997160857811)
+2026-03-08 13:10:35,855 - __main__ - ERROR - サインアップコマンドでエラー
+Traceback (most recent call last):
+  File "/opt/homebrew/Cellar/python@3.10/3.10.19_1/Frameworks/Python.framework/Versions/3.10/lib/python3.10/asyncio/selector_events.py", line 862, in _read_ready__data_received
+    data = self._sock.recv(self.max_size)
+OSError: [Errno 65] No route to host
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/kotohasaki/Documents/Programming/ChatGPT-Business-Account-Generator/bot.py", line 250, in run_generate_process
+    await interaction.followup.send("✅ VPN接続を確認しました。処理を続行します...")
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/webhook/async_.py", line 1900, in send
+    data = await adapter.execute_webhook(
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/discord/webhook/async_.py", line 182, in request
+    async with session.request(
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 1510, in __aenter__
+    self._resp: _RetType = await self._coro
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 779, in _request
+    resp = await handler(req)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client.py", line 757, in _connect_and_send_request
+    await resp.start(conn)
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/client_reqrep.py", line 539, in start
+    message, payload = await protocol.read()  # type: ignore[union-attr]
+  File "/Users/kotohasaki/Library/Python/3.10/lib/python/site-packages/aiohttp/streams.py", line 680, in read
+    await self._waiter
+aiohttp.client_exceptions.ClientOSError: [Errno 65] No route to host
+2026-03-08 13:10:37,871 - discord.gateway - INFO - Shard ID None has successfully RESUMED session c1303d153988fdc29be3107338aa6bf0.
+2026-03-08 13:11:52,752 - browser_automation - INFO - 拡張機能は無効化されています。外部VPNアプリケーションを使用してください。
+2026-03-08 13:11:53,420 - browser_automation - INFO - 前回のブラウザセッションを読み込みます: /Users/kotohasaki/Documents/Programming/ChatGPT-Business-Account-Generator/.browser_storage_state.json
+2026-03-08 13:11:54,504 - browser_automation - INFO - 新規ブラウザコンテキストを作成しました
+2026-03-08 13:11:55,154 - browser_automation - INFO - 新規ページを作成しました
+2026-03-08 13:11:55,154 - browser_automation - INFO - ブラウザを起動しました
+2026-03-08 13:11:55,154 - __main__ - INFO - 新規ブラウザセッションを開始しました
+2026-03-08 13:11:58,232 - chatgpt_signup - INFO - === ステップ1: mail.tmアカウント作成 ===
+2026-03-08 13:12:02,918 - mail_tm_api - INFO - アカウント作成成功: l38pam0t4ilx@dollicons.com
+2026-03-08 13:12:05,085 - chatgpt_signup - INFO - メールアドレス: l38pam0t4ilx@dollicons.com
+2026-03-08 13:12:05,086 - chatgpt_signup - INFO - === ステップ2: ChatGPTサインアップページにアクセス ===
+2026-03-08 13:12:14,287 - browser_automation - INFO - ページ移動: https://chatgpt.com/team-sign-up?promo_campaign=team1dollar
+2026-03-08 13:12:19,289 - chatgpt_signup - INFO - === ステップ3: メールアドレス入力 ===
+2026-03-08 13:12:21,114 - browser_automation - INFO - 要素が見つかりました: input#email[placeholder*="メール"] (by=css, 1回目)
+2026-03-08 13:12:24,147 - browser_automation - INFO - 入力成功: input#email[placeholder*="メール"] = l38pam0t4ilx@dollico...
+2026-03-08 13:12:29,148 - chatgpt_signup - INFO - === ステップ4: Business プランをはじめるボタン ===
+2026-03-08 13:12:29,162 - browser_automation - INFO - 要素が見つかりました: Business プランをはじめる (by=text, 1回目)
+2026-03-08 13:12:30,726 - browser_automation - INFO - クリック成功: Business プランをはじめる
+2026-03-08 13:12:35,727 - chatgpt_signup - INFO - === ステップ5: パスワード入力 ===
+2026-03-08 13:12:38,929 - browser_automation - INFO - iframe内で要素が見つかりました: input#_r_4_-new-password (by=css, 1回目)
+2026-03-08 13:12:41,946 - browser_automation - INFO - 入力成功: input#_r_4_-new-password = Do6F!!$vgn^&24^J...
+2026-03-08 13:12:46,947 - chatgpt_signup - INFO - === ステップ6: Continueボタン押下とエラーチェック ===
+2026-03-08 13:12:46,947 - chatgpt_signup - INFO - Continueボタンを押します（初回）
+2026-03-08 13:12:46,950 - browser_automation - INFO - 要素が見つかりました: button[type="submit"] (by=css, 1回目)
+2026-03-08 13:12:48,484 - browser_automation - INFO - クリック成功: button[type="submit"]
+2026-03-08 13:12:53,486 - chatgpt_signup - INFO - エラー表示を待機中（5秒）...
+2026-03-08 13:12:58,487 - chatgpt_signup - INFO - エラーチェックを実行中...
+2026-03-08 13:12:58,508 - chatgpt_signup - INFO - エラーメッセージは表示されていますが、'不明なエラー'ではありません。
+2026-03-08 13:12:58,508 - chatgpt_signup - INFO - エラーは検出されませんでした。次のステップへ進みます。
+2026-03-08 13:12:58,508 - chatgpt_signup - INFO - === メール送信待機（10秒） ===
+2026-03-08 13:13:08,509 - chatgpt_signup - INFO - === ステップ7: 検証コード（非同期自動取得） ===
+2026-03-08 13:13:08,510 - mail_tm_api - INFO - 検証コードを待機中... (最大300秒)
+2026-03-08 13:13:14,181 - mail_tm_api - INFO - 検証コードを発見: 067092
+2026-03-08 13:13:14,181 - chatgpt_signup - INFO - 検証コードを自動取得しました: 067092
+2026-03-08 13:13:14,192 - browser_automation - INFO - 要素が見つかりました: input#_r_5_-code (by=css, 1回目)
+2026-03-08 13:13:17,219 - browser_automation - INFO - 入力成功: input#_r_5_-code = 067092...
+2026-03-08 13:13:22,231 - browser_automation - INFO - 要素が見つかりました: button[type="submit"] (by=css, 1回目)
+2026-03-08 13:13:23,777 - browser_automation - INFO - クリック成功: button[type="submit"]
+2026-03-08 13:13:28,778 - chatgpt_signup - INFO - === ステップ8: 名前入力 ===
+2026-03-08 13:13:28,791 - browser_automation - INFO - 要素が見つかりました: input#_r_h_-name (by=css, 1回目)
+2026-03-08 13:13:31,816 - browser_automation - INFO - 入力成功: input#_r_h_-name = User...
+2026-03-08 13:13:36,818 - chatgpt_signup - INFO - === ステップ9: 生年月日設定 ===
+2026-03-08 13:13:41,426 - browser_automation - INFO - 生年月日の年を設定: 2000
+2026-03-08 13:13:46,428 - chatgpt_signup - INFO - === ステップ10: アカウント作成完了 ===
+2026-03-08 13:13:46,438 - browser_automation - INFO - 要素が見つかりました: button[data-dd-action-name="Continue"] (by=css, 1回目)
+2026-03-08 13:13:48,004 - browser_automation - INFO - クリック成功: button[data-dd-action-name="Continue"]
+2026-03-08 13:13:53,006 - chatgpt_signup - INFO - === ステップ11: キャンセル → 無料オファーページへ遷移 ===
+2026-03-08 13:13:58,018 - browser_automation - INFO - 要素が見つかりません。待機中... (1回目): キャンセルする
+2026-03-08 13:13:59,810 - browser_automation - INFO - 要素が見つかりました: キャンセルする (by=text, 2回目)
+2026-03-08 13:14:01,346 - browser_automation - INFO - クリック成功: キャンセルする
+2026-03-08 13:14:07,888 - browser_automation - INFO - ページ移動: https://chatgpt.com/#pricing
+2026-03-08 13:14:15,890 - chatgpt_signup - INFO - === モード2: 無料オファーなしで終了 ===
+2026-03-08 13:14:19,296 - browser_automation - INFO - ページ移動: https://chatgpt.com/
+2026-03-08 13:14:27,298 - chatgpt_signup - INFO - === サインアップ完了（モード2） ===
+2026-03-08 13:19:17,162 - discord.gateway - INFO - Shard ID None has successfully RESUMED session c1303d153988fdc29be3107338aa6bf0.
+2026-03-08 13:22:42,045 - discord.client - WARNING - PyNaCl is not installed, voice will NOT be supported
+2026-03-08 13:22:42,045 - discord.client - INFO - logging in using static token
+2026-03-08 13:22:43,085 - discord.gateway - INFO - Shard ID None has connected to Gateway (Session ID: c192c7f93a90d5398779f486a641b6da).
+2026-03-08 13:22:45,094 - __main__ - INFO - Botがログインしました: ChatGPT_Account_Generator (1479805997160857811)
+2026-03-08 13:22:45,777 - __main__ - INFO - スラッシュコマンドを同期しました: 5個

@@ -140,7 +140,7 @@ async def on_ready():
     """Bot準備完了時"""
     logger.info(f"Botがログインしました: {bot.user.name} ({bot.user.id})")
     print(f"✅ Botが起動しました: {bot.user.name}")
-    print(f"コマンド: スラッシュコマンド (/generate など)")
+    print(f"コマンド: スラッシュコマンド (/generate 1, /generate 2, /paypal など)")
     
     # スラッシュコマンドを同期
     try:
@@ -153,7 +153,7 @@ async def on_ready():
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching,
-            name="/generate"
+            name="/generate 1 | /generate 2"
         )
     )
 
@@ -181,9 +181,12 @@ async def on_message(message: discord.Message):
     await bot.process_commands(message)
 
 
-async def run_generate_process(interaction: discord.Interaction):
+async def run_generate_process(interaction: discord.Interaction, mode: str = "1"):
     """
     ChatGPT Teamアカウント生成の共通処理
+    
+    Args:
+        mode: "1" = 無料オファーあり, "2" = 無料オファーなし
     """
     user_id = interaction.user.id
     
@@ -250,7 +253,7 @@ async def run_generate_process(interaction: discord.Interaction):
             # セッション削除
             if user_id in active_sessions:
                 del active_sessions[user_id]
-            await interaction.followup.send("⏰ タイムアウトしました。もう一度 `/generate` からやり直してください。")
+            await interaction.followup.send("⏰ タイムアウトしました。もう一度 `/generate 1` または `/generate 2` からやり直してください。")
             return
         
         # 2. ブラウザ起動
@@ -272,8 +275,9 @@ async def run_generate_process(interaction: discord.Interaction):
             ask_user_choice=session.ask_user_choice
         )
         
-        await interaction.followup.send("🔄 サインアッププロセスを開始します...")
-        result = await signup.run_full_signup()
+        mode_text = "無料オファーあり" if mode == "1" else "無料オファーなし"
+        await interaction.followup.send(f"🔄 サインアッププロセスを開始します...（モード: {mode_text}）")
+        result = await signup.run_full_signup(mode=mode)
         
         # 結果表示
         if result.success:
@@ -319,12 +323,17 @@ async def run_generate_process(interaction: discord.Interaction):
 # スラッシュコマンド: /paypal
 # スラッシュコマンド: /generate
 @bot.tree.command(name="generate", description="ChatGPT Teamアカウントを生成します")
-async def generate_command(interaction: discord.Interaction):
+@app_commands.choices(mode=[
+    app_commands.Choice(name="1 - 無料オファーを受け取る（従来の動作）", value="1"),
+    app_commands.Choice(name="2 - 無料オファーなし（ステップ11で終了）", value="2"),
+])
+@app_commands.describe(mode="生成モードを選択")
+async def generate_command(interaction: discord.Interaction, mode: app_commands.Choice[str]):
     """
     /generate スラッシュコマンド
     ChatGPT Teamアカウントを生成
     """
-    await run_generate_process(interaction)
+    await run_generate_process(interaction, mode.value)
 
 
 # スラッシュコマンド: /paypal
@@ -511,7 +520,9 @@ async def slash_help_command(interaction: discord.Interaction):
     
     # スラッシュコマンド
     slash_commands = [
-        ("/generate", "ChatGPT Teamアカウントを生成"),
+        ("/generate 1", "ChatGPT Teamアカウントを生成（無料オファーあり）"),
+        ("/generate 2", "ChatGPT Teamアカウントを生成（無料オファーなし）"),
+        ("/paypal", "PayPalにログイン（ログイン情報を維持）"),
         ("/cancel", "進行中のサインアップをキャンセル"),
         ("/status", "Botの状態を確認"),
         ("/help", "このヘルプを表示")
@@ -526,7 +537,7 @@ async def slash_help_command(interaction: discord.Interaction):
     
     embed.add_field(
         name="使用方法",
-        value="1. `/generate` を実行\n2. ブラウザが開くのを待つ\n3. プロンプトが表示されたら、指示に従って入力\n4. 完了後、メールアドレスとパスワードが表示されます",
+        value="1. `/generate 1` （無料オファーあり）または `/generate 2` （無料オファーなし）を実行\n2. ブラウザが開くのを待つ\n3. プロンプトが表示されたら、指示に従って入力\n4. 完了後、メールアドレスとパスワードが表示されます",
         inline=False
     )
     
