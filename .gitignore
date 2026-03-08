@@ -3,3 +3,12 @@ venv/
 __pycache__/
 .pytest_cache/
 tests/__pycache__/
+
+# Local History (contains sensitive data)
+.lh/
+
+# Chrome user data
+.chrome_user_data/
+
+# Browser storage state
+.browser_storage_state.json
