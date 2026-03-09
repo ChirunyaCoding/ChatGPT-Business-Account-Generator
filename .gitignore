@@ -12,3 +12,12 @@ tests/__pycache__/
 
 # Browser storage state
 .browser_storage_state.json
+
+# Screenshots (auto-generated)
+screenshots/
+
+# Logs
+logs/*.log
+
+# Node modules
+node_modules/
