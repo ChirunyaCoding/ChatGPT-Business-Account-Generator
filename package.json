@@ -1,6 +1,6 @@
 {
   "name": "chatgpt-signup-bot",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "ChatGPTサインアップ自動化 - Puppeteer Extra + Stealth Plugin",
   "main": "puppeteer_extra_bot.js",
   "scripts": {
@@ -12,8 +12,7 @@
     "dotenv": "^17.3.1",
     "puppeteer": "^21.11.0",
     "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "puppeteer-firefox": "^0.5.1"
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
   },
   "engines": {
     "node": ">=16.0.0"

@@ -18,11 +18,17 @@ function detectBrowserPaths() {
         chrome: null
     };
     
-    // Brave検出
+    // Brave検出（OS別パス）
+    const isMac = process.platform === 'darwin';
     const bravePaths = [
         process.env.BRAVE_PATH,
-        '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
-        '/usr/bin/brave-browser'
+        ...(isMac ? [
+            '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+            '/usr/bin/brave-browser'
+        ] : [
+            'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+            'C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe'
+        ])
     ];
     
     for (const p of bravePaths) {

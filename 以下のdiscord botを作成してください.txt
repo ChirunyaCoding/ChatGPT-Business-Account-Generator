@@ -1,0 +1,40 @@
+以下のdiscord botを作成してください
+
+アクセス
+https://chatgpt.com/auth/login
+
+押す↓
+<button class="btn relative group-focus-within/dialog:focus-visible:[outline-width:1.5px] group-focus-within/dialog:focus-visible:[outline-offset:2.5px] group-focus-within/dialog:focus-visible:[outline-style:solid] group-focus-within/dialog:focus-visible:[outline-color:var(--text-primary)] btn-blue btn-large" data-testid="login-button"><div class="flex items-center justify-center"><span>ログイン</span></div></button>
+
+メールアドレスを入力↓
+<input id="_r_2_-email" autocomplete="email" placeholder="メール アドレス" aria-labelledby="react-aria3935246121-_r_9_" class="_input_1kwl2_1 _target_10s5b_134" form="_r_2_" data-rac="" type="email" value="" name="email">
+
+押す↓
+<button class="_root_3rdp0_62 _primary_3rdp0_107" aria-describedby="" aria-disabled="false" data-dd-action-name="Continue" type="submit" name="intent" value="email">続行</button>
+
+検証コードAPI経由で受け取り、入力
+<input aria-describedby="_r_f_" id="_r_j_-code" autocomplete="one-time-code" maxlength="6" placeholder="コード" inputmode="numeric" aria-labelledby="react-aria3935246121-_r_m_" class="_input_1kwl2_1 _target_10s5b_134" form="_r_j_" data-rac="" type="text" value="" name="code">
+
+押す↓
+<button class="_root_3rdp0_62 _primary_3rdp0_107" aria-describedby="" aria-disabled="false" data-dd-action-name="Continue" type="submit" name="intent" value="validate">続行</button>
+
+押す↓
+<button class="_root_l0v7g_1 _button_6w4yh_49" name="workspace_id" value="ac853860-369c-441b-941a-b502dd5cfb7e"><span class="_root_z7cgb_51" title="test のワークスペース" aria-label="test のワークスペース" aria-hidden="true" style="--avatar-background-color: #ed6262; --avatar-size: 40px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M3 6C3 4.34315 4.34315 3 6 3H12C13.6569 3 15 4.34315 15 6V7H18C19.6569 7 21 8.34315 21 10V19H22C22.5523 19 23 19.4477 23 20C23 20.5523 22.5523 21 22 21H2C1.44772 21 1 20.5523 1 20C1 19.4477 1.44772 19 2 19H3V6ZM5 19H8V17C8 16.4477 8.44772 16 9 16C9.55228 16 10 16.4477 10 17V19H13V6C13 5.44772 12.5523 5 12 5H6C5.44772 5 5 5.44772 5 6V19ZM15 19H19V10C19 9.44772 18.5523 9 18 9H15V19Z" fill="currentColor"></path></svg></span><span class="_base_dw77f_67 _medium_dw77f_99 _primary_dw77f_113">test のワークスペース</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="_chevron_6w4yh_80"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.29289 4.29289C8.68342 3.90237 9.31658 3.90237 9.70711 4.29289L16.7071 11.2929C17.0976 11.6834 17.0976 12.3166 16.7071 12.7071L9.70711 19.7071C9.31658 20.0976 8.68342 20.0976 8.29289 19.7071C7.90237 19.3166 7.90237 18.6834 8.29289 18.2929L14.5858 12L8.29289 5.70711C7.90237 5.31658 7.90237 4.68342 8.29289 4.29289Z" fill="currentColor"></path></svg></button>
+
+押す↓
+<button type="button" class="border-token-interactive-border-secondary-default flex w-full items-center justify-center gap-1 bg-token-main-surface-primary rounded-full border px-3 py-2 text-xs font-medium hover:bg-token-interactive-bg-secondary-hover focus-visible:ring-2 focus-visible:ring-[#5856D6] focus-visible:ring-offset-1 focus-visible:ring-offset-transparent focus-visible:outline-hidden motion-safe:transition-colors motion-safe:duration-150 motion-safe:ease-out"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" aria-hidden="true" class="icon-sm"><use href="/cdn/assets/sprites-core-ni7q5mnh.svg#edbcb1" fill="currentColor"></use></svg><span>チームメンバーを招待する</span></button>
+
+
+押す↓
+<button class="btn relative group-focus-within/dialog:focus-visible:[outline-width:1.5px] group-focus-within/dialog:focus-visible:[outline-offset:2.5px] group-focus-within/dialog:focus-visible:[outline-style:solid] group-focus-within/dialog:focus-visible:[outline-color:var(--text-primary)] btn-secondary"><div class="flex w-full items-center justify-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" aria-label="" class="-ms-0.5 icon"><use href="/cdn/assets/sprites-core-ni7q5mnh.svg#6be74c" fill="currentColor"></use></svg>さらに追加する</div></button>
+
+
+ユーザーにメールアドレスを訪ね、貰ったら入力↓（4つあるから最大4個）
+<input class="rounded-full border border-token-border-default bg-token-bg-primary placeholder:text-token-text-tertiary px-5 py-3 focus:border-token-icon-accent focus:ring-token-icon-accent focus:ring-0" placeholder="メールアドレス" type="email" value="">
+
+
+全部入力したら押す↓
+<button class="btn relative group-focus-within/dialog:focus-visible:[outline-width:1.5px] group-focus-within/dialog:focus-visible:[outline-offset:2.5px] group-focus-within/dialog:focus-visible:[outline-style:solid] group-focus-within/dialog:focus-visible:[outline-color:var(--text-primary)] btn-primary"><div class="flex items-center justify-center">招待を送信する</div></button>
+
+
+ワークスペースへの招待が完了しましたとユーザーに知らせる

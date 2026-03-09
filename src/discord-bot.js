@@ -6,6 +6,7 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder } = require('discord.js');
 const { spawn } = require('child_process');
 const path = require('path');
+const { safeDeferReply, safeEditReply, isUnknownInteractionError } = require('./utils/discord-interaction');
 
 require('dotenv').config();
 
@@ -22,11 +23,25 @@ if (!TOKEN) {
 const commands = [
     new SlashCommandBuilder()
         .setName('create-account')
-        .setDescription('ChatGPTアカウントを自動作成します (Firefox/Chrome自動切り替え)')
+        .setDescription('ChatGPTワークスペースを作成します')
         .toJSON(),
     new SlashCommandBuilder()
         .setName('paypal-login')
         .setDescription('PayPalに手動でログインします（ブラウザが開いたまま維持されます）')
+        .toJSON(),
+    new SlashCommandBuilder()
+        .setName('openbrowser')
+        .setDescription('ブラウザを起動します')
+        .addStringOption(option =>
+            option
+                .setName('browser')
+                .setDescription('使用するブラウザ')
+                .setRequired(false)
+                .addChoices(
+                    { name: 'Brave', value: 'brave' },
+                    { name: 'Chrome', value: 'chrome' }
+                )
+        )
         .toJSON()
 ];
 
@@ -63,7 +78,7 @@ const client = new Client({
     ]
 });
 
-client.once('ready', () => {
+client.once('clientReady', () => {
     console.log(`✅ Discord Bot ログイン完了: ${client.user.tag}`);
     console.log('🔄 Brave/Chrome自動切り替えモード');
     console.log('🤖 /create-account コマンドでアカウント作成を開始できます');
@@ -79,7 +94,7 @@ async function updateProgress(interaction, step, percent) {
         .setDescription(`\`${filledProgress}\` **${percent}%**\n\n📋 **${step}**`)
         .setTimestamp();
     
-    await interaction.editReply({
+    await safeEditReply(interaction, {
         content: null,
         embeds: [embed]
     });
@@ -89,69 +104,89 @@ async function updateProgress(interaction, step, percent) {
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
-    if (interaction.commandName === 'create-account') {
-        await handleCreateAccount(interaction);
-    }
-    
-    if (interaction.commandName === 'paypal-login') {
-        await handlePayPalLogin(interaction);
+    try {
+        if (interaction.commandName === 'create-account') {
+            await handleCreateAccount(interaction);
+            return;
+        }
+
+        if (interaction.commandName === 'paypal-login') {
+            await handlePayPalLogin(interaction);
+            return;
+        }
+
+        if (interaction.commandName === 'openbrowser') {
+            await handleOpenBrowser(interaction);
+        }
+    } catch (error) {
+        if (isUnknownInteractionError(error)) {
+            console.warn('⚠️ Interactionの有効期限切れを検知したため処理を終了しました (10062)');
+            return;
+        }
+        console.error('❌ interactionCreate処理エラー:', error);
     }
 });
 
 // アカウント作成処理
 async function handleCreateAccount(interaction) {
-    // 即座に応答
+    // 3秒制限対策: 先にdeferしてから編集応答を返す
+    const deferred = await safeDeferReply(interaction, { flags: 64 });
+    if (!deferred) {
+        return;
+    }
+
     const initialEmbed = new EmbedBuilder()
         .setColor(0x0099FF)
         .setTitle('🚀 ChatGPTアカウント作成中')
         .setDescription('⏳ ブラウザを検出しています...')
         .setTimestamp();
-    
-    await interaction.reply({ 
+
+    const initialReplySent = await safeEditReply(interaction, {
+        content: null,
         embeds: [initialEmbed], 
-        flags: 64 
     });
-    
+    if (!initialReplySent) {
+        return;
+    }
+
     try {
         await updateProgress(interaction, '準備中...', 0);
-        
+
         // Unifiedスクリプトを実行
         const result = await runSignupScript(interaction, updateProgress);
-        
+
         // ブラウザアイコン選択
         const browserEmoji = {
             'brave': '🦁',
             'chrome': '🌐'
         }[result.browser] || '🌐';
-        
+
         // 完了メッセージ
         const embed = new EmbedBuilder()
             .setColor(0x00FF00)
             .setTitle(`${browserEmoji} アカウント作成完了！`)
             .addFields(
                 { name: '📧 Email', value: `\`${result.email}\``, inline: false },
-                { name: '🔑 Password', value: `\`${result.password}\``, inline: false },
-                { name: '👤 Name', value: result.name || '-', inline: false }
+                { name: '🔑 Password', value: `\`${result.password}\``, inline: false }
             )
-            .setFooter({ text: `使用ブラウザ: ${result.browser} | ⚠️ この情報は他の人に見せないでください` })
             .setTimestamp();
-        
-        await interaction.editReply({
+
+        await safeEditReply(interaction, {
             content: null,
             embeds: [embed]
         });
-        
+
     } catch (error) {
         console.error('❌ エラー:', error);
-        
+
         try {
             const errorEmbed = new EmbedBuilder()
                 .setColor(0xFF0000)
                 .setTitle('❌ エラーが発生しました')
                 .setDescription(`\`\`\`${error.message}\`\`\``)
                 .setTimestamp();
-            
-            await interaction.editReply({
+
+            await safeEditReply(interaction, {
                 content: null,
                 embeds: [errorEmbed]
             });
@@ -164,68 +199,69 @@ async function handleCreateAccount(interaction) {
 // Puppeteerスクリプト実行関数
 function runSignupScript(interaction, updateProgress) {
     return new Promise((resolve, reject) => {
-        const nodePath = '/opt/homebrew/bin/node';
+        // OSに応じてNodeパスを決定（macOS/Windows両対応）
+        const nodePath = process.env.NODE_PATH || (process.platform === 'darwin' ? '/opt/homebrew/bin/node' : process.execPath);
         const scriptPath = path.join(__dirname, 'puppeteer_unified.js');
-        
+
         const child = spawn(nodePath, [scriptPath], {
-            env: { 
-                ...process.env, 
-                PATH: '/opt/homebrew/bin:' + process.env.PATH,
+            env: {
+                ...process.env,
+                PATH: process.platform === 'darwin' ? '/opt/homebrew/bin:' + process.env.PATH : process.env.PATH,
                 HEADLESS: process.env.HEADLESS || 'false'
             },
-            timeout: 300000 // 5分タイムアウト
+            timeout: 120000 // 2分タイムアウト
         });
-        
+
         let stdout = '';
         let stderr = '';
-        
+
         child.stdout.on('data', async (data) => {
             const output = data.toString();
             stdout += output;
             console.log(output);
-            
+
             try {
                 if (output.includes('Step 1:') || output.includes('mail.tmアカウント作成')) {
-                    await updateProgress(interaction, 'メールアドレス生成中', 10);
-                } else if (output.includes('Brave を起動中') || output.includes('Chrome を起動中')) {
-                    await updateProgress(interaction, 'ブラウザ起動中', 20);
+                    await updateProgress(interaction, 'メールアドレス生成中', 15);
+                } else if (output.includes('Step 2:') || output.includes('Brave を起動中') || output.includes('Chrome を起動中')) {
+                    await updateProgress(interaction, 'ブラウザ起動中', 30);
                 } else if (output.includes('Step 5:')) {
-                    await updateProgress(interaction, 'アカウント作成開始', 40);
+                    await updateProgress(interaction, 'アカウント作成開始', 45);
                 } else if (output.includes('Step 6:')) {
-                    await updateProgress(interaction, 'パスワード設定中', 50);
+                    await updateProgress(interaction, 'パスワード設定中', 55);
                 } else if (output.includes('Step 8:')) {
-                    await updateProgress(interaction, '検証コード待機中', 60);
+                    await updateProgress(interaction, '検証コード待機中', 65);
                 } else if (output.includes('Step 9:')) {
-                    await updateProgress(interaction, '検証コード入力中', 70);
-                } else if (output.includes('Step 10:')) {
-                    await updateProgress(interaction, 'プロフィール設定中', 80);
-                } else if (output.includes('Step 11:')) {
-                    await updateProgress(interaction, '生年月日設定中', 85);
-                } else if (output.includes('Step 13:')) {
-                    await updateProgress(interaction, 'アカウント作成完了処理中', 90);
-                } else if (output.includes('使用ブラウザ:')) {
-                    await updateProgress(interaction, '完了！', 98);
+                    await updateProgress(interaction, '検証コード入力中', 75);
+                } else if (output.includes('Step 15:')) {
+                    await updateProgress(interaction, 'ワークスペース作成ページへ', 85);
+                } else if (output.includes('Step 16:')) {
+                    await updateProgress(interaction, 'ワークスペース名入力中', 90);
+                } else if (output.includes('Step 17:')) {
+                    await updateProgress(interaction, '送信完了', 95);
+                } else if (output.includes('アカウント作成完了')) {
+                    await updateProgress(interaction, '完了！', 100);
                 }
             } catch (e) {
                 // 更新エラーは無視
             }
         });
-        
+
         child.stderr.on('data', (data) => {
             stderr += data.toString();
             console.error(data.toString());
         });
-        
+
         child.on('close', (code) => {
             const result = parseResult(stdout);
-            
+
             if (result.email && result.password) {
                 resolve(result);
             } else {
                 reject(new Error('アカウント情報の取得に失敗しました\n' + stderr));
             }
         });
-        
+
         child.on('error', (error) => {
             reject(error);
         });
@@ -237,47 +273,56 @@ function parseResult(output) {
     const result = {
         email: null,
         password: null,
-        name: null,
+        workspace: null,
         browser: null
     };
-    
-    const emailMatch = output.match(/Email:\s*(user\d+@[\w.]+)/);
+
+    const emailMatch = output.match(/Email:\s*([^\s]+@[\w.]+)/i);
     if (emailMatch) result.email = emailMatch[1];
-    
-    const passMatch = output.match(/Password:\s*(Pass\S+)/);
+
+    const passMatch = output.match(/Password:\s*(\S+)/i);
     if (passMatch) result.password = passMatch[1];
-    
-    const nameMatch = output.match(/Name:\s*([\w\s.]+)/);
-    if (nameMatch) result.name = nameMatch[1].trim();
-    
-    const browserMatch = output.match(/使用ブラウザ:\s*(\w+)/);
-    if (browserMatch) result.browser = browserMatch[1];
-    
+
+    const workspaceMatch = output.match(/Workspace:\s*(\S+)/i);
+    if (workspaceMatch) result.workspace = workspaceMatch[1];
+
+    const browserMatch = output.match(/(Brave|Chrome)を起動中/);
+    if (browserMatch) result.browser = browserMatch[1].toLowerCase();
+
     return result;
 }
 
 // PayPalログイン処理
 async function handlePayPalLogin(interaction) {
+    const deferred = await safeDeferReply(interaction, { flags: 64 });
+    if (!deferred) {
+        return;
+    }
+
     const embed = new EmbedBuilder()
         .setColor(0x0099FF)
         .setTitle('💳 PayPalログイン')
         .setDescription('ブラウザを開いてPayPalログインページに移動します...\n\n⚠️ **手動でログインしてください**\nログイン後、ブラウザは開いたまま維持されます。')
         .setTimestamp();
-    
-    await interaction.reply({ 
-        embeds: [embed], 
-        flags: 64 
+
+    const initialReplySent = await safeEditReply(interaction, {
+        content: null,
+        embeds: [embed],
     });
-    
+    if (!initialReplySent) {
+        return;
+    }
+
     try {
         // puppeteer_paypal.js を実行
-        const nodePath = '/opt/homebrew/bin/node';
+        // OSに応じてNodeパスを決定（macOS/Windows両対応）
+        const nodePath = process.env.NODE_PATH || (process.platform === 'darwin' ? '/opt/homebrew/bin/node' : process.execPath);
         const scriptPath = path.join(__dirname, 'puppeteer_paypal.js');
         
         const child = spawn(nodePath, [scriptPath], {
             env: { 
                 ...process.env, 
-                PATH: '/opt/homebrew/bin:' + process.env.PATH,
+                PATH: process.platform === 'darwin' ? '/opt/homebrew/bin:' + process.env.PATH : process.env.PATH,
                 HEADLESS: 'false'
             },
             detached: true, // 親プロセスから切り離す
@@ -292,21 +337,97 @@ async function handlePayPalLogin(interaction) {
             .setTitle('✅ PayPalログインページを開きました')
             .setDescription('ブラウザが開き、PayPalログインページに移動しました。\n\n👆 **手順:**\n1. ブラウザでPayPalにログインしてください\n2. ログイン状態は維持されます\n3. 完了したらこのメッセージは無視してOKです')
             .setTimestamp();
-        
-        await interaction.editReply({
+
+        await safeEditReply(interaction, {
+            content: null,
             embeds: [successEmbed]
         });
-        
+
     } catch (error) {
         console.error('❌ PayPalログインエラー:', error);
-        
+
         const errorEmbed = new EmbedBuilder()
             .setColor(0xFF0000)
             .setTitle('❌ エラーが発生しました')
             .setDescription(`\`\`\`${error.message}\`\`\``)
             .setTimestamp();
+
+        await safeEditReply(interaction, {
+            content: null,
+            embeds: [errorEmbed]
+        });
+    }
+}
+
+// ブラウザ起動処理
+async function handleOpenBrowser(interaction) {
+    const deferred = await safeDeferReply(interaction, { flags: 64 });
+    if (!deferred) {
+        return;
+    }
+
+    const browserChoice = interaction.options.getString('browser');
+    const browserName = browserChoice ? browserChoice.toUpperCase() : '自動選択';
+    
+    const embed = new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle('🌐 ブラウザ起動')
+        .setDescription(`${browserName}でブラウザを起動します...`)
+        .setTimestamp();
+
+    const initialReplySent = await safeEditReply(interaction, {
+        content: null,
+        embeds: [embed],
+    });
+    if (!initialReplySent) {
+        return;
+    }
+
+    try {
+        // OSに応じてNodeパスを決定（macOS/Windows両対応）
+        const nodePath = process.env.NODE_PATH || (process.platform === 'darwin' ? '/opt/homebrew/bin/node' : process.execPath);
+        const scriptPath = path.join(__dirname, 'open_browser.js');
         
-        await interaction.editReply({
+        const args = [scriptPath];
+        if (browserChoice) {
+            args.push(browserChoice);
+        }
+        
+        const child = spawn(nodePath, args, {
+            env: { 
+                ...process.env, 
+                PATH: process.platform === 'darwin' ? '/opt/homebrew/bin:' + process.env.PATH : process.env.PATH,
+                HEADLESS: 'false'
+            },
+            detached: true,
+            stdio: 'ignore'
+        });
+        
+        child.unref();
+        
+        // 完了メッセージ
+        const successEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('✅ ブラウザを起動しました')
+            .setDescription(`${browserChoice === 'brave' ? '🦁 Brave' : browserChoice === 'chrome' ? '🌐 Chrome' : '🔍 自動選択'}でブラウザを起動しました。\n\n👆 **手順:**\n1. ブラウザがChatGPTに移動します\n2. 手動で操作してください\n3. ブラウザは30分間開いたまま維持されます`)
+            .setTimestamp();
+
+        await safeEditReply(interaction, {
+            content: null,
+            embeds: [successEmbed]
+        });
+
+    } catch (error) {
+        console.error('❌ ブラウザ起動エラー:', error);
+
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('❌ エラーが発生しました')
+            .setDescription(`\`\`\`${error.message}\`\`\``)
+            .setTimestamp();
+
+        await safeEditReply(interaction, {
+            content: null,
             embeds: [errorEmbed]
         });
     }
