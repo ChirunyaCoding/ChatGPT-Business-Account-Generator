@@ -9,6 +9,8 @@ tests/__pycache__/
 
 # Chrome user data
 .chrome_user_data/
+.invite_profile/
+.paypal_user_data/
 
 # Browser storage state
 .browser_storage_state.json
