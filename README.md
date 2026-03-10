@@ -125,6 +125,36 @@ ls "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 - 既存のブラウザプロセスを終了: `killall firefox` / `killall "Google Chrome"`
 - コンピューターを再起動
 
+### 廃止したコマンドが表示される（Discordコマンドのキャッシュ問題）
+
+一度実装したコマンドが、削除してもDiscord上に残り続けることがあります。
+
+**解決策:**
+
+1. **コマンドを全削除**
+   ```bash
+   # macOS/Linux
+   ./clear-commands.sh
+   
+   # Windows
+   clear-commands.bat
+   ```
+
+2. **Botを再起動**
+   ```bash
+   node src/discord-bot.js
+   ```
+
+3. **Discordを再起動**（Ctrl+RまたはCmd+R）
+
+**原因:**
+- Discordのグローバルコマンドは反映に最大1時間かかる
+- ギルドコマンドとグローバルコマンドの混在
+- Discordクライアントのキャッシュ
+
+**予防策:**
+- `.env` に `DISCORD_GUILD_ID` を設定してギルドコマンドを使用（即時反映）
+
 ## 注意事項
 
 - `.env` ファイルは絶対に公開しないでください

@@ -1,2 +1,3 @@
-2026/03/09-09:35:18.177 eb03b Creating DB /Users/kotohasaki/Documents/ChatGPT-Business-Account-Generator/.paypal_user_data/Default/Session Storage since it was missing.
-2026/03/09-09:35:18.182 eb03b Reusing MANIFEST /Users/kotohasaki/Documents/ChatGPT-Business-Account-Generator/.paypal_user_data/Default/Session Storage/MANIFEST-000001
+2026/03/10-07:12:36.303 29f440 Reusing MANIFEST /Users/kotohasaki/Documents/ChatGPT-Business-Account-Generator/.paypal_user_data/Default/Session Storage/MANIFEST-000001
+2026/03/10-07:12:36.303 29f440 Recovering log #7
+2026/03/10-07:12:36.303 29f440 Reusing old log /Users/kotohasaki/Documents/ChatGPT-Business-Account-Generator/.paypal_user_data/Default/Session Storage/000007.log 

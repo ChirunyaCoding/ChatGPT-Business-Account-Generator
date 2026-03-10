@@ -1,0 +1,82 @@
+[
+  {
+    "id": "mmjmmbka114dg",
+    "name": "Workspace-mbka",
+    "email": "user1773078979964@dollicons.com",
+    "password": "Passdpg036od!",
+    "maxSeats": 4,
+    "usedSeats": 2,
+    "members": [
+      {
+        "email": "jody6479@dollicons.com",
+        "addedAt": "2026-03-09T20:22:40.960Z",
+        "expiresAt": "2026-04-08T20:22:40.960Z"
+      },
+      {
+        "email": "jody6479@dollicons.com",
+        "addedAt": "2026-03-09T20:44:39.798Z",
+        "expiresAt": "2026-04-08T20:44:39.798Z"
+      }
+    ],
+    "createdAt": "2026-03-09T20:21:11.818Z",
+    "expiresAt": "2026-04-08T20:21:11.818Z",
+    "status": "active",
+    "menuId": "mmjmk677"
+  },
+  {
+    "id": "mmjmzenlcb1qr",
+    "name": "Workspace-zenl",
+    "email": "user1773078979964@dollicons.com",
+    "password": "Passdpg036od!",
+    "maxSeats": 4,
+    "usedSeats": 1,
+    "members": [
+      {
+        "email": "jody6479@dollicons.com",
+        "addedAt": "2026-03-09T20:39:20.487Z",
+        "expiresAt": "2026-04-08T20:39:20.487Z"
+      }
+    ],
+    "createdAt": "2026-03-09T20:31:22.353Z",
+    "expiresAt": "2026-04-08T20:31:22.354Z",
+    "status": "active",
+    "menuId": "mmjmk677"
+  },
+  {
+    "id": "mmjnpb8h3rh1e",
+    "name": "Workspace-pb8g",
+    "email": "user1773089254820@dollicons.com",
+    "password": "Passeog5037t!",
+    "maxSeats": 4,
+    "usedSeats": 0,
+    "members": [],
+    "createdAt": "2026-03-09T20:51:30.978Z",
+    "expiresAt": "2026-04-08T20:51:30.978Z",
+    "status": "active",
+    "menuId": null
+  },
+  {
+    "id": "mmjnpvwy9g4pf",
+    "name": "Workspace-pvwy",
+    "email": "user1773089254820@dollicons.com",
+    "password": "Passeog5037t!",
+    "maxSeats": 4,
+    "usedSeats": 2,
+    "members": [
+      {
+        "email": "jody6479@dollicons.com",
+        "addedAt": "2026-03-09T20:53:00.243Z",
+        "expiresAt": "2026-04-08T20:53:00.243Z"
+      },
+      {
+        "email": "jody6479@dollicons.com",
+        "addedAt": "2026-03-09T20:54:34.765Z",
+        "expiresAt": "2026-04-08T20:54:34.765Z"
+      }
+    ],
+    "createdAt": "2026-03-09T20:51:57.778Z",
+    "expiresAt": "2026-04-08T20:51:57.778Z",
+    "status": "active",
+    "menuId": "mmjmk677"
+  }
+]

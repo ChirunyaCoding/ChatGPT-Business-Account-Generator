@@ -5,6 +5,7 @@
 
 const puppeteer = require('puppeteer');
 const fs = require('fs');
+const path = require('path');
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -94,11 +95,15 @@ async function openBrowser() {
     
     const headlessMode = process.env.HEADLESS === 'true';
     
+    // PayPalログイン維持用のユーザーデータディレクトリ
+    const userDataDir = path.join(__dirname, '..', '.paypal_user_data');
+    
     console.log(`🚀 ${browserType === 'brave' ? '🦁 Brave' : '🌐 Chrome'}を起動中...`);
     
     const browser = await puppeteer.launch({
         headless: headlessMode,
         executablePath: browserPath,
+        userDataDir: userDataDir,  // ログイン状態を維持
         slowMo: 50,
         timeout: 120000,
         args: [

@@ -1,2 +1,7 @@
-2026/03/09-09:35:18.078 eb03b Creating DB /Users/kotohasaki/Documents/ChatGPT-Business-Account-Generator/.paypal_user_data/Default/Local Storage/leveldb since it was missing.
-2026/03/09-09:35:18.082 eb03b Reusing MANIFEST /Users/kotohasaki/Documents/ChatGPT-Business-Account-Generator/.paypal_user_data/Default/Local Storage/leveldb/MANIFEST-000001
+2026/03/10-07:12:36.142 29f440 Reusing MANIFEST /Users/kotohasaki/Documents/ChatGPT-Business-Account-Generator/.paypal_user_data/Default/Local Storage/leveldb/MANIFEST-000001
+2026/03/10-07:12:36.144 29f440 Recovering log #44
+2026/03/10-07:12:36.144 29f440 Reusing old log /Users/kotohasaki/Documents/ChatGPT-Business-Account-Generator/.paypal_user_data/Default/Local Storage/leveldb/000044.log 
+2026/03/10-07:12:36.144 29f440 Delete type=0 #41
+2026/03/10-07:13:36.148 29f444 Level-0 table #48: started
+2026/03/10-07:13:36.155 29f444 Level-0 table #48: 335721 bytes OK
+2026/03/10-07:13:36.157 29f444 Delete type=0 #44

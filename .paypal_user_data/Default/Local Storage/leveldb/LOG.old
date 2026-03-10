@@ -1,0 +1,17 @@
+2026/03/10-07:10:41.355 29dfbc Reusing MANIFEST /Users/kotohasaki/Documents/ChatGPT-Business-Account-Generator/.paypal_user_data/Default/Local Storage/leveldb/MANIFEST-000001
+2026/03/10-07:10:41.359 29dfbc Recovering log #38
+2026/03/10-07:10:41.359 29dfbc Reusing old log /Users/kotohasaki/Documents/ChatGPT-Business-Account-Generator/.paypal_user_data/Default/Local Storage/leveldb/000038.log 
+2026/03/10-07:11:41.362 29dfbf Level-0 table #42: started
+2026/03/10-07:11:41.366 29dfbf Level-0 table #42: 54846 bytes OK
+2026/03/10-07:11:41.368 29dfbf Delete type=0 #38
+2026/03/10-07:11:41.373 29dfbc Compacting 4@0 + 1@1 files
+2026/03/10-07:11:41.380 29dfbc Generated table #43@0: 34 keys, 55718 bytes
+2026/03/10-07:11:41.381 29dfbc Compacted 4@0 + 1@1 files => 55718 bytes
+2026/03/10-07:11:41.382 29dfbc compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/03/10-07:11:41.383 29dfbc Delete type=2 #39
+2026/03/10-07:11:41.383 29dfbc Delete type=2 #36
+2026/03/10-07:11:41.383 29dfbc Delete type=2 #33
+2026/03/10-07:11:41.383 29dfbc Delete type=2 #31
+2026/03/10-07:11:41.383 29dfbc Delete type=2 #42
+2026/03/10-07:12:06.442 29dfbc Level-0 table #45: started
+2026/03/10-07:12:06.455 29dfbc Level-0 table #45: 335768 bytes OK

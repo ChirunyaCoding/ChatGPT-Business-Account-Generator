@@ -1,0 +1,15 @@
+{
+  "accounts": [
+    {
+      "name": "default",
+      "email": "user1773078979964@dollicons.com",
+      "password": "Passdpg036od!"
+    },
+    {
+      "name": "test",
+      "email": "user1773089254820@dollicons.com",
+      "password": "Passeog5037t!"
+    }
+  ],
+  "default_account": "default"
+}
