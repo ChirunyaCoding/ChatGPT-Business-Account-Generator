@@ -304,32 +304,58 @@ async function inviteToWorkspace(workspaceEmail, workspacePassword, inviteEmail)
         
         await sleep(10000);
         
-        // 2. 「ログイン」ボタンをクリック（15回リトライ）
-        console.log('🔘 「ログイン」ボタンを待機・クリック...');
+        // 2. ログインボタンまたは「その他のオプション」ボタンをクリック（15回リトライ）
+        console.log('🔘 ログインボタンまたは「その他のオプション」を待機・クリック...');
+        
+        // まずログインボタンを探す
+        let loginButtonFound = false;
         try {
             const loginButton = await waitForElementAny(page, [
                 'button[data-testid="login-button"]',
                 'button:has-text("ログイン")',
                 'button:has-text("Log in")',
                 'button.btn-primary'
-            ], { maxRetries: 15, interval: 10000 });
+            ], { maxRetries: 3, interval: 3000 });
             await loginButton.click();
+            loginButtonFound = true;
+            console.log('  ✅ 「ログイン」ボタンをクリックしました');
         } catch (e) {
-            // フォールバック：テキストで検索
-            console.log('  ⚠️ セレクタ検出失敗、テキスト検索でフォールバック...');
-            await page.evaluate(() => {
-                const buttons = Array.from(document.querySelectorAll('button'));
-                const btn = buttons.find(b => 
-                    b.textContent.includes('ログイン') || 
-                    b.textContent.includes('Log in')
-                );
-                if (btn) btn.click();
-            });
+            console.log('  ℹ️ ログインボタンが見つかりません、「その他のオプション」を探します...');
         }
         
-        await sleep(10000);
+        // ログインボタンがない場合は「その他のオプション」を探す
+        if (!loginButtonFound) {
+            try {
+                const otherOptionsButton = await waitForElementAny(page, [
+                    'button:has-text("その他のオプション")',
+                    'button:has-text("その他")',
+                    'button:has-text("Other options")',
+                    'button:has-text("Other")',
+                    'button[aria-expanded]',
+                    'button svg use[href*="ba3792"]'
+                ], { maxRetries: 15, interval: 10000 });
+                await otherOptionsButton.click();
+                console.log('  ✅ 「その他のオプション」をクリックしました');
+            } catch (e) {
+                // フォールバック：テキストで検索
+                console.log('  ⚠️ セレクタ検出失敗、テキスト検索でフォールバック...');
+                await page.evaluate(() => {
+                    const buttons = Array.from(document.querySelectorAll('button'));
+                    const btn = buttons.find(b => 
+                        b.textContent.includes('その他のオプション') || 
+                        b.textContent.includes('その他') ||
+                        b.textContent.includes('Other options') ||
+                        b.textContent.includes('Other')
+                    );
+                    if (btn) btn.click();
+                });
+                console.log('  ✅ 「その他のオプション」をクリックしました（フォールバック）');
+            }
+        }
         
-        // 3. メールアドレス入力（15回リトライ）
+        await sleep(5000);
+        
+        // 3. メールアドレス入力欄を待機・入力（15回リトライ）
         console.log('✉️ メールアドレス入力欄を待機...');
         const emailInput = await waitForElementAny(page, [
             'input[type="email"]',
@@ -508,42 +534,41 @@ async function inviteToWorkspace(workspaceEmail, workspacePassword, inviteEmail)
             console.log('ℹ️ Workspace選択スキップ（既に選択済みまたは単一Workspace）');
         }
         
-        // 8. 「メンバーを招待」ボタンを探してクリック（15回リトライ）
-        console.log('🔘 「メンバーを招待」ボタンを待機・クリック...');
+        // 9. /admin/members ページへ移動
+        console.log('🌐 Step 9: /admin/members ページへ移動...');
+        await page.goto('https://chatgpt.com/admin/members', {
+            waitUntil: 'networkidle2',
+            timeout: 60000
+        });
+        await sleep(5000);
+        console.log('  ✅ /admin/members に到達しました');
         
-        try {
-            const inviteBtn = await waitForElementAny(page, [
-                'button:has-text("チームメンバーを招待")',
-                'button:has-text("メンバーを招待")',
-                'button:has-text("Invite")',
-                'button:has-text("招待")',
-                '[data-testid="invite-button"]',
-                'button svg use[href*="invite"]'
-            ], { maxRetries: 15, interval: 10000 });
-            
-            await inviteBtn.click();
-        } catch (e) {
-            // 設定ページへ移動して探す
-            console.log('🌐 設定ページから招待メニューを探します...');
-            await page.goto('https://chatgpt.com/admin/members', {
-                waitUntil: 'networkidle2',
-                timeout: 60000
-            });
-            
-            const inviteBtn2 = await waitForElementAny(page, [
-                'button:has-text("招待")',
-                'button:has-text("Invite")',
-                'button:has-text("追加")',
-                'button:has-text("Add")'
-            ], { maxRetries: 15, interval: 10000, timeoutMsg: '招待ボタンが見つかりません' });
-            
-            await inviteBtn2.click();
-        }
+        // 10. 「メンバーを招待する」ボタンをクリック
+        console.log('🔘 Step 10: 「メンバーを招待する」ボタンをクリック...');
+        const inviteBtn = await waitForElementAny(page, [
+            'button:has-text("メンバーを招待する")',
+            'button:has-text("メンバーを招待")',
+            'button:has-text("Invite members")',
+            'button:has-text("Invite")',
+            'button svg use[href*="6be74c"]'
+        ], { maxRetries: 15, interval: 10000, timeoutMsg: '「メンバーを招待する」ボタンが見つかりません' });
         
-        await sleep(10000);
+        await inviteBtn.click();
+        console.log('  ✅ 「メンバーを招待する」をクリックしました');
+        await sleep(3000);
         
-        // 9. 「さらに追加する」ボタンをクリック（15回リトライ）
-        console.log('🔘 「さらに追加する」を待機・クリック...');
+        // 11. メールアドレス入力欄が表示されるのを待つ
+        console.log('⏳ Step 11: メールアドレス入力欄を待機...');
+        await waitForElementAny(page, [
+            'input[type="email"]',
+            'input[placeholder*="メールアドレス"]',
+            'input[placeholder*="email"]',
+            'input.rounded-full'
+        ], { maxRetries: 15, interval: 10000, timeoutMsg: 'メールアドレス入力欄が見つかりません' });
+        console.log('  ✅ メールアドレス入力欄が表示されました');
+        
+        // 12. 「さらに追加する」ボタン（複数人招待時）
+        console.log('🔘 Step 12: 「さらに追加する」を確認...');
         try {
             const addMoreBtn = await waitForElementAny(page, [
                 'button:has-text("さらに追加")',
@@ -559,8 +584,8 @@ async function inviteToWorkspace(workspaceEmail, workspacePassword, inviteEmail)
             console.log('  ℹ️ 「さらに追加する」ボタンなし（既に入力欄あり）');
         }
         
-        // 10. メールアドレス入力（15回リトライ）
-        console.log(`✉️ 招待メールアドレス入力欄を待機: ${inviteEmail}`);
+        // 12. メールアドレス入力（15回リトライ）
+        console.log(`✉️ Step 12: 招待メールアドレス入力: ${inviteEmail}`);
         try {
             const emailInput = await waitForElementAny(page, [
                 'input[type="email"]',
@@ -586,8 +611,8 @@ async function inviteToWorkspace(workspaceEmail, workspacePassword, inviteEmail)
             await sleep(10000); // 10秒待機
         }
         
-        // 11. 「招待を送信する」ボタンをクリック（15回リトライ）
-        console.log('🔘 「招待を送信する」ボタンを待機・クリック...');
+        // 13. 「招待を送信する」ボタンをクリック（15回リトライ）
+        console.log('🔘 Step 13: 「招待を送信する」ボタンを待機・クリック...');
         try {
             const sendBtn = await waitForElementAny(page, [
                 'button:has-text("招待を送信")',
@@ -639,8 +664,8 @@ async function inviteToWorkspace(workspaceEmail, workspacePassword, inviteEmail)
             }
         }
         
-        // 12. 成功確認
-        console.log('✅ 招待送信完了！');
+        // 14. 成功確認
+        console.log('✅ Step 14: 招待送信完了！');
         
         // スクリーンショット保存（デバッグ用）
         await page.screenshot({ 

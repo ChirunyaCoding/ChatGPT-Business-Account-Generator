@@ -14,6 +14,116 @@ function randomDelay(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+// 「不明なエラー」監視と自動対処クラス
+class ErrorMonitor {
+    constructor(page) {
+        this.page = page;
+        this.isRunning = false;
+        this.retryCount = 0;
+        this.maxRetries = 5;
+        this.lastErrorTime = 0;
+        this.errorCooldown = 10000; // 10秒以内の連続エラーは無視
+    }
+
+    // 監視開始
+    start() {
+        this.isRunning = true;
+        this.monitorLoop();
+    }
+
+    // 監視停止
+    stop() {
+        this.isRunning = false;
+    }
+
+    // 監視ループ
+    async monitorLoop() {
+        while (this.isRunning) {
+            try {
+                await this.checkAndHandleError();
+                await sleep(2000); // 2秒間隔でチェック
+            } catch (e) {
+                // 監視エラーは無視
+            }
+        }
+    }
+
+    // エラーチェックと対処
+    async checkAndHandleError() {
+        const now = Date.now();
+        
+        // クールダウンチェック
+        if (now - this.lastErrorTime < this.errorCooldown) {
+            return;
+        }
+
+        // エラーメッセージを検索
+        const errorInfo = await this.page.evaluate(() => {
+            const errorElements = document.querySelectorAll('span, div, p, h1, h2, h3');
+            for (const el of errorElements) {
+                const text = el.textContent.trim();
+                if (text.includes('不明なエラーが発生しました') ||
+                    text.includes('An unknown error occurred') ||
+                    text.includes('エラーが発生しました') ||
+                    text.includes('An error occurred') ||
+                    text.includes('問題が発生しました') ||
+                    text.includes('Something went wrong')) {
+                    return {
+                        found: true,
+                        text: text,
+                        hasRetryButton: !!document.querySelector('button[data-dd-action-name="Try again"], button:has-text("もう一度試す"), button:has-text("Try again")')
+                    };
+                }
+            }
+            return { found: false };
+        });
+
+        if (errorInfo.found) {
+            this.lastErrorTime = now;
+            this.retryCount++;
+            
+            console.log(`   ⚠️ エラー検出: "${errorInfo.text}" (リトライ ${this.retryCount}/${this.maxRetries})`);
+
+            if (this.retryCount > this.maxRetries) {
+                console.log('   ❌ 最大リトライ回数に達しました');
+                throw new Error('最大リトライ回数に達しました: ' + errorInfo.text);
+            }
+
+            // 「もう一度試す」ボタンを探してクリック
+            if (errorInfo.hasRetryButton) {
+                const clicked = await this.page.evaluate(() => {
+                    const buttons = Array.from(document.querySelectorAll('button'));
+                    const retryBtn = buttons.find(b => {
+                        const text = b.textContent.trim();
+                        return text.includes('もう一度試す') || 
+                               text.includes('Try again') ||
+                               b.getAttribute('data-dd-action-name') === 'Try again';
+                    });
+                    if (retryBtn) {
+                        retryBtn.click();
+                        return true;
+                    }
+                    return false;
+                });
+
+                if (clicked) {
+                    console.log('   ✅ 「もう一度試す」ボタンをクリックしました');
+                    await sleep(randomDelay(5000, 8000)); // 5-8秒待機
+                } else {
+                    // ボタンがない場合はページリロード
+                    console.log('   🔄 ページをリロードします');
+                    await this.page.reload({ waitUntil: 'domcontentloaded' });
+                    await sleep(randomDelay(5000, 8000));
+                }
+            } else {
+                // リトライボタンがない場合は少し待つ
+                console.log('   ⏳ リトライボタンなし、待機します');
+                await sleep(randomDelay(3000, 5000));
+            }
+        }
+    }
+}
+
 // iframeとメインページの両方で要素を探すヘルパー関数
 async function findElementInPageOrFrames(page, selector) {
     // まずメインページで探す
@@ -92,6 +202,9 @@ function detectBrowserPaths() {
         chrome: null
     };
     
+    // 環境変数で強制指定されている場合は優先
+    const forceBrowser = process.env.FORCE_BROWSER;
+    
     // Brave検出（OS別パス）
     const isMac = process.platform === 'darwin';
     const bravePaths = [
@@ -131,6 +244,14 @@ function detectBrowserPaths() {
         }
     }
     
+    // 強制指定がある場合はそのブラウザのみを返す
+    if (forceBrowser === 'brave' && paths.brave) {
+        return { brave: paths.brave, chrome: null };
+    }
+    if (forceBrowser === 'chrome' && paths.chrome) {
+        return { brave: null, chrome: paths.chrome };
+    }
+    
     return paths;
 }
 
@@ -143,27 +264,63 @@ class MailTMClient {
         this.password = null;
     }
 
-    async createAccount() {
-        const domainsRes = await fetch(`${this.baseUrl}/domains`);
-        const domains = await domainsRes.json();
-        const domain = domains['hydra:member'][0].domain;
+    async createAccount(maxRetries = 5) {
+        // レート制限対策: 0-10秒のランダムな遅延
+        const delay = Math.floor(Math.random() * 10000);
+        await new Promise(resolve => setTimeout(resolve, delay));
         
-        this.email = `user${Date.now()}@${domain}`;
-        this.password = `Pass${Math.random().toString(36).slice(-8)}!`;
+        let lastError = null;
         
-        const createRes = await fetch(`${this.baseUrl}/accounts`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                address: this.email,
-                password: this.password
-            })
-        });
-        
-        if (!createRes.ok) {
-            throw new Error('mail.tmアカウント作成失敗');
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                console.log(`  📧 mail.tmアカウント作成試行 ${attempt}/${maxRetries}`);
+                
+                const domainsRes = await fetch(`${this.baseUrl}/domains`);
+                if (!domainsRes.ok) {
+                    throw new Error(`ドメイン取得失敗: ${domainsRes.status}`);
+                }
+                const domains = await domainsRes.json();
+                const domain = domains['hydra:member'][0].domain;
+                
+                // タイムスタンプ + ランダム文字列で一意性を確保
+                const randomSuffix = Math.random().toString(36).substring(2, 8);
+                this.email = `user${Date.now()}${randomSuffix}@${domain}`;
+                this.password = `Pass${Math.random().toString(36).slice(-8)}!`;
+                
+                const createRes = await fetch(`${this.baseUrl}/accounts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        address: this.email,
+                        password: this.password
+                    })
+                });
+                
+                if (createRes.ok) {
+                    console.log(`  ✅ mail.tmアカウント作成成功 (試行 ${attempt})`);
+                    return { email: this.email, password: this.password };
+                } else {
+                    const errorText = await createRes.text();
+                    throw new Error(`HTTP ${createRes.status}: ${errorText}`);
+                }
+                
+            } catch (error) {
+                lastError = error;
+                console.log(`  ⚠️ mail.tm作成失敗 (試行 ${attempt}/${maxRetries}): ${error.message}`);
+                
+                if (attempt < maxRetries) {
+                    // リトライ間隔を徐々に長く（指数バックオフ）
+                    const waitTime = 5000 * attempt + Math.floor(Math.random() * 5000);
+                    console.log(`  ⏳ ${waitTime}ms 待機してリトライ...`);
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                }
+            }
         }
         
+        throw new Error(`mail.tmアカウント作成失敗 (${maxRetries}回試行): ${lastError.message}`);
+    }
+    
+    async getToken() {
         const tokenRes = await fetch(`${this.baseUrl}/token`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -176,12 +333,14 @@ class MailTMClient {
         const tokenData = await tokenRes.json();
         this.token = tokenData.token;
         
-        console.log(`✅ mail.tm作成: ${this.email}`);
-        return { email: this.email, password: this.password };
+        console.log(`✅ mail.tmトークン取得成功`);
+        return this.token;
     }
 
-    async waitForVerificationCode(timeout = 300000, interval = 5000) {
+    async waitForVerificationCode(timeout = 300000, interval = 3000) {
         const startTime = Date.now();
+        
+        console.log('  📧 検証コードメールを待機中...');
         
         while (Date.now() - startTime < timeout) {
             await new Promise(resolve => setTimeout(resolve, interval));
@@ -193,19 +352,37 @@ class MailTMClient {
             const messages = await messagesRes.json();
             
             if (messages['hydra:member'] && messages['hydra:member'].length > 0) {
-                const messageId = messages['hydra:member'][0].id;
-                
-                const messageRes = await fetch(`${this.baseUrl}/messages/${messageId}`, {
-                    headers: { 'Authorization': `Bearer ${this.token}` }
-                });
-                
-                const message = await messageRes.json();
-                const codeMatch = message.text.match(/\d{6}/);
-                
-                if (codeMatch) {
-                    console.log(`📧 検証コード: ${codeMatch[0]}`);
-                    return codeMatch[0];
+                // 最新のメッセージから順にチェック
+                for (const msg of messages['hydra:member']) {
+                    const messageRes = await fetch(`${this.baseUrl}/messages/${msg.id}`, {
+                        headers: { 'Authorization': `Bearer ${this.token}` }
+                    });
+                    
+                    const message = await messageRes.json();
+                    const content = message.text || message.html || '';
+                    
+                    // OpenAI/ChatGPTからのメールかチェック
+                    const isFromOpenAI = msg.from.address.includes('openai.com') || 
+                                         msg.from.address.includes('chatgpt.com');
+                    const isVerification = msg.subject.includes('verification') || 
+                                         msg.subject.includes('確認') ||
+                                         msg.subject.includes('コード') ||
+                                         msg.subject.includes('code');
+                    
+                    // 6桁の数字を検索
+                    const codeMatch = content.match(/\b\d{6}\b/);
+                    
+                    if (codeMatch) {
+                        console.log(`  ✅ 検証コード取得: ${codeMatch[0]}`);
+                        if (isFromOpenAI) console.log('     (OpenAIからのメール)');
+                        return codeMatch[0];
+                    }
                 }
+            }
+            
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            if (elapsed % 10 === 0) {
+                console.log(`  ⏳ ${elapsed}秒経過...`);
             }
         }
         
@@ -288,9 +465,17 @@ async function launchBrowser(browserType, browserPath) {
 async function signupWithBrowser(browserType, browserPath, mailClient, account) {
     const browser = await launchBrowser(browserType, browserPath);
     
+    // エラーモニターを初期化（後で開始）
+    let errorMonitor = null;
+    
     try {
         const page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
+        
+        // エラーモニター開始
+        errorMonitor = new ErrorMonitor(page);
+        errorMonitor.start();
+        console.log('   🔍 エラー監視を開始しました');
         
         // Step 2: ChatGPTチームプライシングページへ
         console.log('\n🌐 Step 2: ChatGPTチームプライシングページへ移動');
@@ -450,17 +635,106 @@ async function signupWithBrowser(browserType, browserPath, mailClient, account) 
         
         // Step 9: 検証コード入力
         console.log('\n🔢 Step 9: 検証コード入力');
-        const codeInput = await page.waitForSelector('input[type="text"], input[name="code"]', {
-            visible: true,
-            timeout: 15000
+        console.log(`   検証コード: ${verificationCode}`);
+        
+        // デバッグ: スクリーンショット撮影
+        await page.screenshot({ path: 'debug_before_code_input.png', fullPage: false });
+        
+        // デバッグ: ページ上の全input要素を確認
+        const inputInfo = await page.evaluate(() => {
+            const inputs = Array.from(document.querySelectorAll('input'));
+            return inputs.map((input, i) => ({
+                index: i,
+                type: input.type,
+                name: input.name,
+                id: input.id,
+                autocomplete: input.autocomplete,
+                maxlength: input.maxLength,
+                placeholder: input.placeholder,
+                value: input.value,
+                visible: input.offsetParent !== null,
+                rect: input.getBoundingClientRect()
+            }));
         });
+        console.log('   検出された入力欄:', JSON.stringify(inputInfo, null, 2));
         
-        await codeInput.click();
-        await sleep(randomDelay(100, 300));
+        // まずシンプルなセレクタで試す
+        let codeInput = null;
+        try {
+            codeInput = await page.waitForSelector('input[type="text"]', { visible: true, timeout: 10000 });
+            console.log('   入力欄検出: input[type="text"]');
+        } catch (e) {
+            // フォールバック
+        }
         
-        await codeInput.type(verificationCode, { delay: 0 });
+        // 見つからなければ他のセレクタも試す
+        if (!codeInput) {
+            const selectors = [
+                'input[autocomplete="one-time-code"]',
+                'input[maxlength="6"]',
+                'input[name="code"]',
+                'input#code',
+                'input[placeholder*="code"]',
+                'input[placeholder*="コード"]'
+            ];
+            for (const selector of selectors) {
+                try {
+                    codeInput = await page.$(selector);
+                    if (codeInput) {
+                        console.log(`   入力欄検出: ${selector}`);
+                        break;
+                    }
+                } catch (e) {}
+            }
+        }
+        
+        if (!codeInput) {
+            throw new Error('検証コード入力欄が見つかりません');
+        }
+        
+        // 入力欄にフォーカス（3回クリックして確実にフォーカス）
+        await codeInput.click({ clickCount: 3 });
+        await sleep(500);
+        
+        // 方法1: evaluateで直接値を設定 + イベント発火
+        console.log('   方法1: evaluateで直接値を設定');
+        await page.evaluate((code) => {
+            const input = document.querySelector('input[type="text"]') || 
+                         document.querySelector('input[autocomplete="one-time-code"]') ||
+                         document.querySelector('input[maxlength="6"]');
+            if (input) {
+                // 値を設定
+                input.value = code;
+                // 入力イベントを発火
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+                return true;
+            }
+            return false;
+        }, verificationCode);
+        
+        await sleep(500);
+        
+        // 値が設定されたか確認
+        const currentValue = await page.evaluate(() => {
+            const input = document.querySelector('input[type="text"]') || 
+                         document.querySelector('input[autocomplete="one-time-code"]');
+            return input ? input.value : null;
+        });
+        console.log(`   現在の値: ${currentValue}`);
+        
+        // 値が空なら方法2を試す
+        if (!currentValue || currentValue.length === 0) {
+            console.log('   方法2: キーボード入力を試行');
+            await codeInput.click();
+            await sleep(200);
+            await codeInput.type(verificationCode, { delay: 50 });
+        }
+        
+        await sleep(500);
         console.log(`   コード入力完了: ${verificationCode}`);
-        await sleep(randomDelay(500, 1000));
+        await sleep(1000);
         
         // Step 10: Continueボタン
         console.log('\n➡️ Step 10: Continueボタン');
@@ -658,6 +932,12 @@ async function signupWithBrowser(browserType, browserPath, mailClient, account) 
         await sleep(5000);
         console.log('   ✅ アカウント作成プロセス完了');
         
+        // エラーモニター停止
+        if (errorMonitor) {
+            errorMonitor.stop();
+            console.log('   🔍 エラー監視を停止しました');
+        }
+        
         // ブラウザを閉じる
         await browser.close();
         
@@ -669,6 +949,11 @@ async function signupWithBrowser(browserType, browserPath, mailClient, account) 
             name: fullName
         };
     } catch (error) {
+        // エラーモニター停止
+        if (errorMonitor) {
+            errorMonitor.stop();
+            console.log('   🔍 エラー監視を停止しました');
+        }
         await browser.close();
         throw error;
     }
@@ -709,6 +994,10 @@ async function signupUnified() {
         const account = await mailClient.createAccount();
         console.log(`   Email: ${account.email}`);
         console.log(`   Pass: ${account.password}`);
+        
+        // トークンを取得（メール取得に必要）
+        console.log('   トークン取得中...');
+        await mailClient.getToken();
         console.log('');
         
         try {

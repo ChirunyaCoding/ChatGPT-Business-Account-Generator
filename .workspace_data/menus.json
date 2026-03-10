@@ -1,11 +1,22 @@
 [
   {
-    "id": "mmjmk677",
-    "name": "テスト",
+    "id": "mmktbcp9",
+    "name": "Private Account",
     "channelId": "1479870947736686825",
-    "messageId": "1480661338803146794",
+    "messageId": "1480962542162411692",
     "hidden": false,
     "allowedRoles": [],
-    "createdAt": "2026-03-09T20:19:31.555Z"
+    "menuType": "PA",
+    "createdAt": "2026-03-10T16:16:23.565Z"
+  },
+  {
+    "id": "mmktbcpa",
+    "name": "Shared Account",
+    "channelId": "1479870947736686825",
+    "messageId": "1480962542162411692",
+    "hidden": false,
+    "allowedRoles": [],
+    "menuType": "SA",
+    "createdAt": "2026-03-10T16:16:23.566Z"
   }
 ]

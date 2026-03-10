@@ -27,8 +27,7 @@ const {
     addMenu, removeMenu, getAllMenus, getMenuByName, setMenuVisibility, updateMenuMessageId,
     addWorkspace, getAllWorkspaces, getWorkspacesByMenu, removeWorkspace, addMemberToWorkspace, cleanupExpiredWorkspaces,
     createTicket, getTicketByUser, closeTicket, resetAllTickets, removeUserTicket,
-    getAccount, getAllAccounts, addAccount, removeAccount, loadAccounts,
-    getMenuAvailability, getWorkspacesByMenuType
+    getAccount, getAllAccounts, addAccount, removeAccount, loadAccounts
 } = require('./workspace_manager');
 
 // 起動時に期限切れをクリーンアップ
@@ -48,19 +47,6 @@ const commands = [
                 .setRequired(false)
                 .setMinValue(1)
                 .setMaxValue(5)
-        )
-        .addStringOption(option =>
-            option
-                .setName('menu')
-                .setDescription('作成後に追加するドロップダウンメニュー')
-                .setRequired(false)
-                .setAutocomplete(true)
-        )
-        .addRoleOption(option =>
-            option
-                .setName('role')
-                .setDescription('チケット発行に必要なロール（指定するとそのロールのみ発行可能）')
-                .setRequired(false)
         )
         .toJSON(),
     new SlashCommandBuilder()
@@ -116,11 +102,11 @@ const commands = [
         .addSubcommand(subcommand =>
             subcommand
                 .setName('add')
-                .setDescription('ドロップダウンメニューを作成（PASAでPAとSA同時作成）')
+                .setDescription('ドロップダウンメニューを作成')
                 .addStringOption(option =>
                     option
                         .setName('name')
-                        .setDescription('メニュー名（PASAでPAとSA同時作成）')
+                        .setDescription('メニュー名')
                         .setRequired(true)
                 )
         )
@@ -170,19 +156,6 @@ const commands = [
             subcommand
                 .setName('list')
                 .setDescription('メニュー一覧を表示')
-        )
-        .toJSON(),
-    new SlashCommandBuilder()
-        .setName('reload')
-        .setDescription('全メニューを最新状態に更新します'),
-    // ==================== Account管理コマンド ====================
-    new SlashCommandBuilder()
-        .setName('account')
-        .setDescription('アカウント管理')
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('available')
-                .setDescription('利用可能なアカウント状況を表示')
         )
         .toJSON(),
     // ==================== Workspace管理コマンド ====================
@@ -416,57 +389,6 @@ async function updateProgress(interaction, step, percent) {
 
 // コマンド処理
 client.on('interactionCreate', async (interaction) => {
-    // Autocompleteハンドラ
-    if (interaction.isAutocomplete()) {
-        const { getAllMenus } = require('./workspace_manager');
-        
-        try {
-            if (interaction.commandName === 'menu' && interaction.options.getSubcommand() === 'remove') {
-                const menus = getAllMenus();
-                const choices = menus.map(menu => ({
-                    name: menu.name,
-                    value: menu.name
-                }));
-                await interaction.respond(choices.slice(0, 25));
-                return;
-            }
-            
-            if (interaction.commandName === 'menu' && interaction.options.getSubcommand() === 'hide') {
-                const menus = getAllMenus();
-                const choices = menus.map(menu => ({
-                    name: menu.name,
-                    value: menu.name
-                }));
-                await interaction.respond(choices.slice(0, 25));
-                return;
-            }
-            
-            if (interaction.commandName === 'workspace' && interaction.options.getSubcommand() === 'add') {
-                const menus = getAllMenus();
-                const choices = menus.map(menu => ({
-                    name: menu.name,
-                    value: menu.name
-                }));
-                await interaction.respond(choices.slice(0, 25));
-                return;
-            }
-            
-            if (interaction.commandName === 'create-account' && interaction.options.getFocused(true).name === 'menu') {
-                const menus = getAllMenus();
-                const choices = menus.map(menu => ({
-                    name: menu.name,
-                    value: menu.name
-                }));
-                await interaction.respond(choices.slice(0, 25));
-                return;
-            }
-        } catch (error) {
-            console.error('❌ Autocompleteエラー:', error);
-            await interaction.respond([]);
-        }
-        return;
-    }
-    
     if (!interaction.isChatInputCommand()) return;
 
     try {
@@ -503,18 +425,6 @@ client.on('interactionCreate', async (interaction) => {
         // ==================== メニュー管理コマンド ====================
         if (interaction.commandName === 'menu') {
             await handleMenuCommand(interaction);
-            return;
-        }
-
-        // ==================== Account管理コマンド ====================
-        if (interaction.commandName === 'account') {
-            await handleAccountCommand(interaction);
-            return;
-        }
-
-        // ==================== Reloadコマンド ====================
-        if (interaction.commandName === 'reload') {
-            await handleReloadCommand(interaction);
             return;
         }
 
@@ -593,8 +503,6 @@ function detectBrowserPaths() {
 async function handleCreateAccount(interaction) {
     // 作成数を取得（デフォルトは1）
     const count = interaction.options.getInteger('count') || 1;
-    const menuName = interaction.options.getString('menu');
-    const restrictedRole = interaction.options.getRole('role');
     
     // 3秒制限対策: 先にdeferしてから編集応答を返す
     const deferred = await safeDeferReply(interaction, { flags: 64 });
@@ -617,7 +525,7 @@ async function handleCreateAccount(interaction) {
     const initialEmbed = new EmbedBuilder()
         .setColor(0x0099FF)
         .setTitle(`🚀 ChatGPTアカウント作成中 (0/${count})`)
-        .setDescription(`⏳ 検出ブラウザ: ${availableBrowsers.map(b => b.emoji).join(' ')}\n順番に1個ずつ処理します...`)
+        .setDescription(`⏳ 検出ブラウザ: ${availableBrowsers.map(b => b.emoji).join(' ')}\n最大2個まで並列処理します...`)
         .setTimestamp();
 
     const initialReplySent = await safeEditReply(interaction, {
@@ -631,161 +539,58 @@ async function handleCreateAccount(interaction) {
     const results = [];
     const errors = [];
     let completed = 0;
-    let animationInterval = null;
-
-    // 各アカウントの進捗状況を管理
-    const progressStatus = {};
-    for (let i = 1; i <= count; i++) {
-        const browserIndex = (i - 1) % availableBrowsers.length;
-        const browserInfo = availableBrowsers[browserIndex];
-        progressStatus[i] = {
-            index: i,
-            browser: browserInfo.type,
-            emoji: browserInfo.emoji,
-            status: '⏳',
-            step: '準備中',
-            percent: 0
-        };
-    }
-
-    // ローディングアニメーション用
-    const loadingFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-    let frameIndex = 0;
 
     try {
         // 並列処理用の関数
         const createAccountWithBrowser = async (index, browserInfo) => {
             try {
-                // ステータスを実行中に更新
-                progressStatus[index].status = '🔄';
-                progressStatus[index].step = 'ブラウザ起動中';
-                progressStatus[index].percent = 10;
-
-                // カスタム進捗更新関数
-                const customUpdateProgress = async (interaction, step, percent) => {
-                    progressStatus[index].step = step;
-                    progressStatus[index].percent = percent;
+                // 進捗は最終結果のみ更新（並列時の競合を防ぐため）
+                const minimalUpdateProgress = async () => {
+                    // 進捗更新は行わない（最終結果で一括表示）
                 };
 
                 // ブラウザ指定でスクリプトを実行
-                const result = await runSignupScriptWithBrowser(interaction, customUpdateProgress, browserInfo);
-                
-                // 完了ステータスに更新
-                progressStatus[index].status = '✅';
-                progressStatus[index].step = '完了';
-                progressStatus[index].percent = 100;
-                
+                const result = await runSignupScriptWithBrowser(interaction, minimalUpdateProgress, browserInfo);
                 results.push({ ...result, browser: browserInfo.type, index });
                 completed++;
                 
+                // 進捗を更新
+                const progressEmbed = new EmbedBuilder()
+                    .setColor(0x0099FF)
+                    .setTitle(`🚀 ChatGPTアカウント作成中 (${completed}/${count})`)
+                    .setDescription(`⏳ 処理中...\n\n${availableBrowsers.map(b => 
+                        `${b.emoji} ${b.type.toUpperCase()}: ${results.filter(r => r.browser === b.type).length}個完了`
+                    ).join('\n')}`)
+                    .setTimestamp();
+                
+                await safeEditReply(interaction, {
+                    content: null,
+                    embeds: [progressEmbed]
+                }).catch(() => {}); // エラーは無視
+                
             } catch (error) {
                 console.error(`❌ アカウント ${index} の作成エラー:`, error);
-                
-                // エラーステータスに更新
-                progressStatus[index].status = '❌';
-                progressStatus[index].step = 'エラー';
-                progressStatus[index].percent = 0;
-                
                 errors.push({ index, error: error.message, browser: browserInfo.type });
                 completed++;
             }
         };
 
-        // 進捗表示を更新する関数
-        const updateProgressDisplay = async () => {
-            try {
-                frameIndex = (frameIndex + 1) % loadingFrames.length;
-                const loadingFrame = loadingFrames[frameIndex];
-                
-                let description = '';
-                
-                for (let i = 1; i <= count; i++) {
-                    const status = progressStatus[i];
-                    const filled = Math.floor(status.percent / 10);
-                    const empty = 10 - filled;
-                    
-                    // 絵文字プログレスバー
-                    const progressBar = '🟩'.repeat(filled) + '⬜'.repeat(empty);
-                    
-                    if (status.status === '🔄') {
-                        description += `${loadingFrame} ${status.emoji} #${i}: ${progressBar} ${status.percent}%\n   └ ${status.step}\n\n`;
-                    } else if (status.status === '✅') {
-                        description += `✅ ${status.emoji} #${i}: 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩 100%\n   └ 完了\n\n`;
-                    } else if (status.status === '❌') {
-                        description += `❌ ${status.emoji} #${i}: 🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥 ERROR\n   └ ${status.step}\n\n`;
-                    } else {
-                        description += `⏳ ${status.emoji} #${i}: ⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜ 0%\n   └ 待機中\n\n`;
-                    }
-                }
-                
-                description += `━━━━━━━━━━━━━━━━\n`;
-                description += `✅ 完了: ${results.length}  ⏳ 処理中: ${count - results.length - errors.length}  ❌ エラー: ${errors.length}`;
-
-                const embed = new EmbedBuilder()
-                    .setColor(0x0099FF)
-                    .setTitle(`🚀 アカウント作成中 (${completed}/${count})`)
-                    .setDescription(description)
-                    .setTimestamp();
-
-                await safeEditReply(interaction, { content: null, embeds: [embed] }).catch(() => {});
-            } catch (e) {}
-        };
-
-        // アニメーション開始
-        animationInterval = setInterval(updateProgressDisplay, 1000);
-
-        // タスクを順番に1個ずつ実行（並列無し）
+        // タスクを作成（指定数だけ並列）
+        const tasks = [];
         for (let i = 0; i < count; i++) {
+            // ブラウザを交互に割り当て
             const browserIndex = i % availableBrowsers.length;
             const browserInfo = availableBrowsers[browserIndex];
             
-            await createAccountWithBrowser(i + 1, browserInfo);
+            tasks.push(createAccountWithBrowser(i + 1, browserInfo));
         }
-
-        // アニメーション停止
-        if (animationInterval) clearInterval(animationInterval);
+        
+        // 全タスクを並列実行
+        await Promise.all(tasks);
 
         // 結果をインデックス順にソート
         results.sort((a, b) => a.index - b.index);
         errors.sort((a, b) => a.index - b.index);
-
-        // メニュー指定があれば、作成したアカウントをワークスペースとして追加（未アクティベーション状態）
-        let addedToMenu = [];
-        if (menuName && results.length > 0) {
-            const menu = getMenuByName(menuName);
-            if (menu) {
-                for (const result of results) {
-                    try {
-                        const workspace = addWorkspace({
-                            name: `Workspace-${Date.now().toString(36).substr(-4)}`,
-                            email: result.email,
-                            password: result.password,
-                            maxSeats: 4,
-                            expiryDays: 30,
-                            menuId: menu.id,
-                            isActivated: false, // 未アクティベーション状態
-                            isPrivate: menu.menuType === 'PA', // PAなら1人専用、SAなら共有
-                            restrictedRole: restrictedRole ? restrictedRole.id : null, // ロール制限
-                            priority: restrictedRole ? 100 : 0 // ロール制限ありは必ず先頭に表示
-                        });
-                        addedToMenu.push({ 
-                            email: result.email, 
-                            workspaceId: workspace.id,
-                            restrictedRole: restrictedRole ? restrictedRole.name : null
-                        });
-                    } catch (e) {
-                        console.error(`ワークスペース追加エラー: ${result.email}`, e);
-                    }
-                }
-                
-                // メニューメッセージを更新
-                try {
-                    await updateMenuMessage(interaction, menu);
-                } catch (e) {
-                    console.error('メニュー更新エラー:', e);
-                }
-            }
-        }
 
         // 最終結果表示
         const embed = new EmbedBuilder()
@@ -802,15 +607,6 @@ async function handleCreateAccount(interaction) {
                 accountsText += `📧 \`${result.email}\`\n`;
                 accountsText += `🔑 \`${result.password}\`\n`;
             });
-            
-            // メニュー追加情報を表示
-            if (addedToMenu.length > 0) {
-                accountsText += `\n📁 **メニュー「${menuName}」に自動追加しました** (${addedToMenu.length}件)`;
-                if (restrictedRole) {
-                    accountsText += `\n🔒 ロール制限: <@&${restrictedRole.id}> のみ利用可能`;
-                }
-            }
-            
             embed.setDescription(accountsText);
         }
 
@@ -830,9 +626,6 @@ async function handleCreateAccount(interaction) {
         });
 
     } catch (error) {
-        // エラー時もアニメーションを停止
-        if (animationInterval) clearInterval(animationInterval);
-        
         console.error('❌ エラー:', error);
 
         try {
@@ -1357,91 +1150,21 @@ async function handleMenuCommand(interaction) {
         if (subcommand === 'add') {
             const name = interaction.options.getString('name');
             
-            // メニュータイプを判定（PA/SAは特別な名前として扱う）
-            // PASAの場合: PAとSAを同時に作成（1つのメッセージにまとめる）
-            if (name.toUpperCase() === 'PASA') {
-                // Private Account メニュー作成
-                const paMenu = addMenu({
-                    name: 'Private Account',
-                    channelId: interaction.channelId,
-                    hidden: false,
-                    allowedRoles: [],
-                    menuType: 'PA'
-                });
-                
-                if (!paMenu) {
-                    return interaction.editReply({
-                        content: `❌ メニュー「Private Account」は既に存在します`
-                    });
-                }
-                
-                // Shared Account メニュー作成
-                const saMenu = addMenu({
-                    name: 'Shared Account',
-                    channelId: interaction.channelId,
-                    hidden: false,
-                    allowedRoles: [],
-                    menuType: 'SA'
-                });
-                
-                if (!saMenu) {
-                    return interaction.editReply({
-                        content: `❌ メニュー「Shared Account」は既に存在します`
-                    });
-                }
-                
-                // 1つのメッセージに2つのドロップダウンをまとめて作成
-                await createCombinedDropdownMenu(interaction, paMenu, saMenu);
-                
-                // 作成成功メッセージ
-                await interaction.followUp({
-                    content: `🔒 **Private Account** と 👥 **Shared Account** を作成しました`,
-                    ephemeral: true
-                });
-                
-                return;
-            }
-            
-            // 通常の単一メニュー作成
-            let menuType = 'standard';
-            let displayName = name;
-            
-            if (name.toUpperCase() === 'PA') {
-                menuType = 'PA';
-                displayName = 'Private Account';
-            } else if (name.toUpperCase() === 'SA') {
-                menuType = 'SA';
-                displayName = 'Shared Account';
-            }
-            
             const menu = addMenu({
-                name: displayName,
+                name: name,
                 channelId: interaction.channelId,
                 hidden: false,
-                allowedRoles: [],
-                menuType: menuType
+                allowedRoles: []
             });
             
             if (!menu) {
                 return interaction.editReply({
-                    content: `❌ メニュー「${displayName}」は既に存在します`
+                    content: `❌ メニュー「${name}」は既に存在します`
                 });
             }
             
-            // 専用メニューの場合は特別なメッセージを表示
-            const typeEmoji = menuType === 'PA' ? '🔒' : (menuType === 'SA' ? '👥' : '📋');
-            const typeDesc = menuType === 'PA' 
-                ? '専用アカウント用メニュー' 
-                : (menuType === 'SA' ? '共有アカウント用メニュー' : '一般メニュー');
-            
             // ドロップダウンメニューを作成して表示
             await createDropdownMenu(interaction, menu);
-            
-            // 作成成功メッセージを追加
-            await interaction.followUp({
-                content: `${typeEmoji} **${displayName}** (${typeDesc}) を作成しました`,
-                ephemeral: true
-            });
             
         } else if (subcommand === 'remove') {
             const name = interaction.options.getString('name');
@@ -1508,8 +1231,7 @@ async function handleMenuCommand(interaction) {
             
             const menuList = menus.map(m => {
                 const visibility = m.hidden ? `🔒 <@&${m.allowedRoles[0]}>のみ` : '🌐 全員';
-                const typeIcon = m.menuType === 'PA' ? '🔒 PA' : (m.menuType === 'SA' ? '👥 SA' : '📋');
-                return `• ${typeIcon} **${m.name}** (${visibility})`;
+                return `• **${m.name}** (${visibility})`;
             }).join('\n');
             
             const embed = new EmbedBuilder()
@@ -1522,162 +1244,6 @@ async function handleMenuCommand(interaction) {
         }
     } catch (error) {
         console.error('❌ メニューコマンドエラー:', error);
-        await interaction.editReply({
-            content: `❌ エラーが発生しました: ${error.message}`
-        });
-    }
-}
-
-// ==================== Reloadハンドラ ====================
-
-async function handleReloadCommand(interaction) {
-    await interaction.deferReply({ ephemeral: true });
-    
-    try {
-        const menus = getAllMenus();
-        
-        if (menus.length === 0) {
-            return interaction.editReply({
-                content: '📋 メニューは作成されていません'
-            });
-        }
-        
-        let updatedCount = 0;
-        let errorCount = 0;
-        
-        // PASA（組み合わせメニュー）を先に処理
-        const processedMessageIds = new Set();
-        
-        for (const menu of menus) {
-            try {
-                console.log(`[DEBUG] 処理中: ${menu.name}, messageId: ${menu.messageId}, menuType: ${menu.menuType}`);
-                
-                // 同じメッセージIDが既に処理済みならスキップ
-                if (menu.messageId && processedMessageIds.has(menu.messageId)) {
-                    console.log(`[DEBUG] スキップ: ${menu.name} は既に処理済み`);
-                    continue;
-                }
-                
-                // PASAかどうかチェック
-                const sameMessageMenus = menus.filter(m => m.messageId === menu.messageId);
-                const isCombined = sameMessageMenus.length >= 2 && 
-                                  sameMessageMenus.some(m => m.menuType === 'PA') && 
-                                  sameMessageMenus.some(m => m.menuType === 'SA');
-                
-                console.log(`[DEBUG] ${menu.name}: isCombined=${isCombined}, sameMessageMenus=${sameMessageMenus.length}`);
-                
-                if (isCombined) {
-                    // PASAは一度だけ処理
-                    const paMenu = sameMessageMenus.find(m => m.menuType === 'PA');
-                    
-                    console.log(`[DEBUG] PASA更新開始: ${paMenu.name}`);
-                    // 両方のドロップダウンを更新
-                    await updateMenuMessage(interaction, paMenu);
-                    processedMessageIds.add(menu.messageId);
-                    updatedCount++;
-                    console.log(`[DEBUG] PASA更新完了`);
-                } else {
-                    // 単一メニュー
-                    console.log(`[DEBUG] 単一メニュー更新開始: ${menu.name}`);
-                    await updateMenuMessage(interaction, menu);
-                    updatedCount++;
-                    console.log(`[DEBUG] 単一メニュー更新完了`);
-                }
-            } catch (e) {
-                console.error(`[ERROR] メニュー「${menu.name}」の更新エラー:`, e);
-                errorCount++;
-            }
-        }
-        
-        const embed = new EmbedBuilder()
-            .setColor(errorCount === 0 ? 0x00FF00 : 0xFFA500)
-            .setTitle('🔄 メニュー更新完了')
-            .setDescription(
-                `✅ 更新成功: ${updatedCount}件\n` +
-                (errorCount > 0 ? `❌ 更新失敗: ${errorCount}件\n` : '') +
-                `\n全メニューを最新状態に更新しました`
-            )
-            .setTimestamp();
-        
-        await interaction.editReply({ embeds: [embed] });
-        
-    } catch (error) {
-        console.error('❌ リロードエラー:', error);
-        await interaction.editReply({
-            content: `❌ エラーが発生しました: ${error.message}`
-        });
-    }
-}
-
-// ==================== Account管理ハンドラ ====================
-
-async function handleAccountCommand(interaction) {
-    const subcommand = interaction.options.getSubcommand();
-    
-    await interaction.deferReply({ ephemeral: true });
-    
-    try {
-        if (subcommand === 'available') {
-            // Private Account (PA) の状況
-            const paStats = getMenuAvailability('PA');
-            // Shared Account (SA) の状況
-            const saStats = getMenuAvailability('SA');
-            
-            // 各メニューの詳細を取得
-            const menus = getAllMenus();
-            
-            // PAメニューの詳細
-            const paMenus = menus.filter(m => m.menuType === 'PA');
-            let paDetails = '';
-            if (paMenus.length === 0) {
-                paDetails = 'メニュー未作成';
-            } else {
-                paMenus.forEach(menu => {
-                    const ws = getWorkspacesByMenu(menu.id);
-                    const available = ws.reduce((sum, w) => sum + (w.maxSeats - w.usedSeats), 0);
-                    paDetails += `• ${menu.name}: ${available}名参加可能\n`;
-                });
-            }
-            
-            // SAメニューの詳細
-            const saMenus = menus.filter(m => m.menuType === 'SA');
-            let saDetails = '';
-            if (saMenus.length === 0) {
-                saDetails = 'メニュー未作成';
-            } else {
-                saMenus.forEach(menu => {
-                    const ws = getWorkspacesByMenu(menu.id);
-                    const available = ws.reduce((sum, w) => sum + (w.maxSeats - w.usedSeats), 0);
-                    saDetails += `• ${menu.name}: ${available}名参加可能\n`;
-                });
-            }
-            
-            const embed = new EmbedBuilder()
-                .setColor(0x0099FF)
-                .setTitle('📊 アカウント利用状況')
-                .setDescription('現在のドロップダウンメニューの空き状況です')
-                .addFields(
-                    {
-                        name: '🔒 Private Account（専用）',
-                        value: paStats.availableSlots > 0 
-                            ? `🟢 **${paStats.availableSlots}名** 参加可能\n\n${paDetails}`
-                            : `🔴 **満席**\n\n${paDetails}`,
-                        inline: true
-                    },
-                    {
-                        name: '👥 Shared Account（共有）',
-                        value: saStats.availableSlots > 0 
-                            ? `🟢 **${saStats.availableSlots}名** 参加可能\n\n${saDetails}`
-                            : `🔴 **満席**\n\n${saDetails}`,
-                        inline: true
-                    }
-                )
-                .setTimestamp();
-            
-            await interaction.editReply({ embeds: [embed] });
-        }
-    } catch (error) {
-        console.error('❌ Accountコマンドエラー:', error);
         await interaction.editReply({
             content: `❌ エラーが発生しました: ${error.message}`
         });
@@ -1702,17 +1268,6 @@ async function createDropdownMenu(interaction, menu) {
         });
     } else {
         workspaces.forEach((ws, index) => {
-            // 未アクティベーションのワークスペース
-            if (ws.isActivated === false) {
-                options.push({
-                    label: `❌WorkSpace-${index + 1}`,
-                    description: '未アクティベーション（使用不可）',
-                    value: ws.id,
-                    emoji: '🔒'
-                });
-                return;
-            }
-            
             const available = ws.maxSeats - ws.usedSeats;
             const daysLeft = Math.ceil((new Date(ws.expiresAt) - new Date()) / (1000 * 60 * 60 * 24));
             
@@ -1721,9 +1276,8 @@ async function createDropdownMenu(interaction, menu) {
             if (available === 0) emoji = '🔴';
             else if (available <= 1) emoji = '🟠';
             
-            const roleLock = ws.restrictedRole ? '✨' : '';
             options.push({
-                label: ws.restrictedRole ? `${roleLock}Premium Limited` : `Workspace-${index + 1}`,
+                label: `Workspace-${index + 1}`,
                 description: `空き: ${available}/${ws.maxSeats} | 残り${daysLeft}日`,
                 value: ws.id,
                 emoji: emoji
@@ -1738,34 +1292,10 @@ async function createDropdownMenu(interaction, menu) {
     
     const row = new ActionRowBuilder().addComponents(selectMenu);
     
-    // 統計情報を計算
-    const paWorkspaces = workspaces.filter(w => w.isPrivate === true && w.isActivated !== false);
-    const saWorkspaces = workspaces.filter(w => w.isPrivate !== true && w.isActivated !== false);
-    const pendingWorkspaces = workspaces.filter(w => w.isActivated === false);
-    
-    // Private Account: 利用可能数 / 総数
-    const paAvailable = paWorkspaces.filter(w => (w.maxSeats - w.usedSeats) > 0).length;
-    const paTotal = paWorkspaces.length;
-    
-    // Shared Account: 空き席数 / 総席数
-    const saAvailableSlots = saWorkspaces.reduce((sum, w) => sum + Math.max(0, w.maxSeats - w.usedSeats), 0);
-    const saTotalSlots = saWorkspaces.reduce((sum, w) => sum + w.maxSeats, 0);
-    
-    // Pending Account: 未アクティベーション数
-    const pendingTotal = pendingWorkspaces.length;
-    
-    // 全利用可能アカウント数
-    const totalAvailableAccounts = paAvailable + saAvailableSlots;
-    
     const embed = new EmbedBuilder()
         .setColor(0x0099FF)
-        .setTitle('Select a workspace from the dropdown below')
-        .setDescription(
-            `🎫Available\n` +
-            `${totalAvailableAccounts}Account\n\n` +
-            `🔒Private Account　　👥Shared Account　　🚫Pending Account\n` +
-            `　${paAvailable}/${paTotal}　　　　　　　　${saAvailableSlots}/${saTotalSlots}　　　　　　　　${pendingTotal}/${pendingTotal}`
-        )
+        .setTitle(`📋 ${menu.name}`)
+        .setDescription('利用したいWorkspaceを選択してください\n🔴満席 🟠残りわずか 🟢空きあり')
         .setTimestamp();
     
     // 権限設定
@@ -1797,158 +1327,6 @@ async function createDropdownMenu(interaction, menu) {
     });
 }
 
-// PAとSAを1つのメッセージにまとめて作成
-async function createCombinedDropdownMenu(interaction, paMenu, saMenu) {
-    const { ActionRowBuilder, StringSelectMenuBuilder, PermissionFlagsBits } = require('discord.js');
-    
-    // PAメニューのワークスペース
-    const paWorkspaces = getWorkspacesByMenu(paMenu.id);
-    const paOptions = [];
-    
-    if (paWorkspaces.length === 0) {
-        paOptions.push({
-            label: 'Workspaceがありません',
-            description: '管理者に連絡してください',
-            value: 'none',
-            emoji: '⚠️'
-        });
-    } else {
-        paWorkspaces.forEach((ws, index) => {
-            if (ws.isActivated === false) {
-                paOptions.push({
-                    label: `❌WorkSpace-${index + 1}`,
-                    description: '未アクティベーション（使用不可）',
-                    value: ws.id,
-                    emoji: '🔒'
-                });
-                return;
-            }
-            
-            const available = ws.maxSeats - ws.usedSeats;
-            const daysLeft = Math.ceil((new Date(ws.expiresAt) - new Date()) / (1000 * 60 * 60 * 24));
-            let emoji = '🟢';
-            if (available === 0) emoji = '🔴';
-            else if (available <= 1) emoji = '🟠';
-            
-            paOptions.push({
-                label: `Workspace-${index + 1}`,
-                description: `空き: ${available}/${ws.maxSeats} | 残り${daysLeft}日`,
-                value: ws.id,
-                emoji: emoji
-            });
-        });
-    }
-    
-    // SAメニューのワークスペース
-    const saWorkspaces = getWorkspacesByMenu(saMenu.id);
-    const saOptions = [];
-    
-    if (saWorkspaces.length === 0) {
-        saOptions.push({
-            label: 'Workspaceがありません',
-            description: '管理者に連絡してください',
-            value: 'none',
-            emoji: '⚠️'
-        });
-    } else {
-        saWorkspaces.forEach((ws, index) => {
-            if (ws.isActivated === false) {
-                saOptions.push({
-                    label: `❌WorkSpace-${index + 1}`,
-                    description: '未アクティベーション（使用不可）',
-                    value: ws.id,
-                    emoji: '🔒'
-                });
-                return;
-            }
-            
-            const available = ws.maxSeats - ws.usedSeats;
-            const daysLeft = Math.ceil((new Date(ws.expiresAt) - new Date()) / (1000 * 60 * 60 * 24));
-            let emoji = '🟢';
-            if (available === 0) emoji = '🔴';
-            else if (available <= 1) emoji = '🟠';
-            
-            saOptions.push({
-                label: `Workspace-${index + 1}`,
-                description: `空き: ${available}/${ws.maxSeats} | 残り${daysLeft}日`,
-                value: ws.id,
-                emoji: emoji
-            });
-        });
-    }
-    
-    // PAドロップダウン
-    const paSelectMenu = new StringSelectMenuBuilder()
-        .setCustomId(`menu_${paMenu.id}`)
-        .setPlaceholder('🔒 Private Accountを選択')
-        .addOptions(paOptions);
-    
-    const paRow = new ActionRowBuilder().addComponents(paSelectMenu);
-    
-    // SAドロップダウン
-    const saSelectMenu = new StringSelectMenuBuilder()
-        .setCustomId(`menu_${saMenu.id}`)
-        .setPlaceholder('👥 Shared Accountを選択')
-        .addOptions(saOptions);
-    
-    const saRow = new ActionRowBuilder().addComponents(saSelectMenu);
-    
-    // 統計情報を計算（両方のメニュー合計）
-    const allWorkspaces = [...paWorkspaces, ...saWorkspaces];
-    const paActive = paWorkspaces.filter(w => w.isPrivate === true && w.isActivated !== false);
-    const saActive = saWorkspaces.filter(w => w.isPrivate !== true && w.isActivated !== false);
-    const pendingAll = allWorkspaces.filter(w => w.isActivated === false);
-    
-    const paAvailable = paActive.filter(w => (w.maxSeats - w.usedSeats) > 0).length;
-    const paTotal = paActive.length;
-    
-    const saAvailableSlots = saActive.reduce((sum, w) => sum + Math.max(0, w.maxSeats - w.usedSeats), 0);
-    const saTotalSlots = saActive.reduce((sum, w) => sum + w.maxSeats, 0);
-    
-    const pendingTotal = pendingAll.length;
-    const totalAvailableAccounts = paAvailable + saAvailableSlots;
-    
-    const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setTitle('Select a workspace from the dropdown below')
-        .setDescription(
-            `🎫Available\n` +
-            `${totalAvailableAccounts}Account\n\n` +
-            `🔒Private Account　　👥Shared Account　　🚫Pending Account\n` +
-            `　${paAvailable}/${paTotal}　　　　　　　　${saAvailableSlots}/${saTotalSlots}　　　　　　　　${pendingTotal}/${pendingTotal}`
-        )
-        .setTimestamp();
-    
-    // 権限設定
-    const permissionOverwrites = [];
-    if (paMenu.hidden && paMenu.allowedRoles.length > 0) {
-        permissionOverwrites.push({
-            id: interaction.guild.id,
-            deny: [PermissionFlagsBits.ViewChannel]
-        });
-        paMenu.allowedRoles.forEach(roleId => {
-            permissionOverwrites.push({
-                id: roleId,
-                allow: [PermissionFlagsBits.ViewChannel]
-            });
-        });
-    }
-    
-    const channel = await interaction.client.channels.fetch(paMenu.channelId);
-    const message = await channel.send({
-        embeds: [embed],
-        components: [paRow, saRow]
-    });
-    
-    // 両方のメッセージIDを保存
-    updateMenuMessageId(paMenu.name, message.id);
-    updateMenuMessageId(saMenu.name, message.id);
-    
-    await interaction.editReply({
-        content: `✅ メニュー「Private Account」と「Shared Account」を作成しました`
-    });
-}
-
 // メニューの選択をリセットする関数
 async function resetMenuSelection(interaction, menuId) {
     try {
@@ -1956,122 +1334,53 @@ async function resetMenuSelection(interaction, menuId) {
         const menu = getAllMenus().find(m => m.id === menuId);
         if (!menu) return;
         
-        // PASAの場合: 同じメッセージにPAとSAの両方があるか確認
-        const allMenus = getAllMenus();
-        const sameMessageMenus = allMenus.filter(m => m.messageId === menu.messageId);
-        const isCombined = sameMessageMenus.length >= 2 && 
-                          sameMessageMenus.some(m => m.menuType === 'PA') && 
-                          sameMessageMenus.some(m => m.menuType === 'SA');
-        
-        if (isCombined) {
-            const paMenu = sameMessageMenus.find(m => m.menuType === 'PA');
-            const saMenu = sameMessageMenus.find(m => m.menuType === 'SA');
-            
-            // PAオプション
-            const paWorkspaces = getWorkspacesByMenu(paMenu.id);
-            const paOptions = [];
-            if (paWorkspaces.length === 0) paOptions.push({ label: 'Workspaceがありません', description: '管理者に連絡してください', value: 'none', emoji: '⚠️' });
-            else {
-                paWorkspaces.forEach((ws, index) => {
-                    if (ws.isActivated === false) { paOptions.push({ label: `❌WorkSpace-${index + 1}`, description: '未アクティベーション', value: ws.id, emoji: '🔒' }); return; }
-                    const available = ws.maxSeats - ws.usedSeats;
-                    const daysLeft = Math.ceil((new Date(ws.expiresAt) - new Date()) / (1000 * 60 * 60 * 24));
-                    let emoji = '🟢'; if (available === 0) emoji = '🔴'; else if (available <= 1) emoji = '🟠';
-                    const roleLock = ws.restrictedRole ? '✨' : '';
-                    paOptions.push({ label: ws.restrictedRole ? `${roleLock}Premium Limited` : `Workspace-${index + 1}`, description: `空き: ${available}/${ws.maxSeats} | 残り${daysLeft}日`, value: ws.id, emoji: emoji });
-                });
-            }
-            
-            // SAオプション
-            const saWorkspaces = getWorkspacesByMenu(saMenu.id);
-            const saOptions = [];
-            if (saWorkspaces.length === 0) saOptions.push({ label: 'Workspaceがありません', description: '管理者に連絡してください', value: 'none', emoji: '⚠️' });
-            else {
-                saWorkspaces.forEach((ws, index) => {
-                    if (ws.isActivated === false) { saOptions.push({ label: `❌WorkSpace-${index + 1}`, description: '未アクティベーション', value: ws.id, emoji: '🔒' }); return; }
-                    const available = ws.maxSeats - ws.usedSeats;
-                    const daysLeft = Math.ceil((new Date(ws.expiresAt) - new Date()) / (1000 * 60 * 60 * 24));
-                    let emoji = '🟢'; if (available === 0) emoji = '🔴'; else if (available <= 1) emoji = '🟠';
-                    const roleLock = ws.restrictedRole ? '✨' : '';
-                    saOptions.push({ label: ws.restrictedRole ? `${roleLock}Premium Limited` : `Workspace-${index + 1}`, description: `空き: ${available}/${ws.maxSeats} | 残り${daysLeft}日`, value: ws.id, emoji: emoji });
-                });
-            }
-            
-            const paSelectMenu = new StringSelectMenuBuilder().setCustomId(`menu_${paMenu.id}`).setPlaceholder('🔒 Private Accountを選択').addOptions(paOptions);
-            const paRow = new ActionRowBuilder().addComponents(paSelectMenu);
-            const saSelectMenu = new StringSelectMenuBuilder().setCustomId(`menu_${saMenu.id}`).setPlaceholder('👥 Shared Accountを選択').addOptions(saOptions);
-            const saRow = new ActionRowBuilder().addComponents(saSelectMenu);
-            
-            const allWorkspaces = [...paWorkspaces, ...saWorkspaces];
-            const paActive = paWorkspaces.filter(w => w.isPrivate === true && w.isActivated !== false);
-            const saActive = saWorkspaces.filter(w => w.isPrivate !== true && w.isActivated !== false);
-            const pendingAll = allWorkspaces.filter(w => w.isActivated === false);
-            
-            const paAvailable = paActive.filter(w => (w.maxSeats - w.usedSeats) > 0).length;
-            const paTotal = paActive.length;
-            const saAvailableSlots = saActive.reduce((sum, w) => sum + Math.max(0, w.maxSeats - w.usedSeats), 0);
-            const saTotalSlots = saActive.reduce((sum, w) => sum + w.maxSeats, 0);
-            const pendingTotal = pendingAll.length;
-            const totalAvailableAccounts = paAvailable + saAvailableSlots;
-            
-            const embed = new EmbedBuilder()
-                .setColor(0x0099FF)
-                .setTitle('Select a workspace from the dropdown below')
-                .setDescription(
-                    `🎫Available\n` +
-                    `${totalAvailableAccounts}Account\n\n` +
-                    `🔒Private Account　　👥Shared Account　　🚫Pending Account\n` +
-                    `　${paAvailable}/${paTotal}　　　　　　　　${saAvailableSlots}/${saTotalSlots}　　　　　　　　${pendingTotal}/${pendingTotal}`
-                )
-                .setTimestamp();
-            
-            await interaction.update({ embeds: [embed], components: [paRow, saRow] });
-            return;
-        }
-        
-        // 単一メニュー（従来通り）
         const workspaces = getWorkspacesByMenu(menuId);
         const options = [];
         
         if (workspaces.length === 0) {
-            options.push({ label: 'Workspaceがありません', description: '管理者に連絡してください', value: 'none', emoji: '⚠️' });
+            options.push({
+                label: 'Workspaceがありません',
+                description: '管理者に連絡してください',
+                value: 'none',
+                emoji: '⚠️'
+            });
         } else {
             workspaces.forEach((ws, index) => {
-                if (ws.isActivated === false) { options.push({ label: `❌WorkSpace-${index + 1}`, description: '未アクティベーション（使用不可）', value: ws.id, emoji: '🔒' }); return; }
                 const available = ws.maxSeats - ws.usedSeats;
                 const daysLeft = Math.ceil((new Date(ws.expiresAt) - new Date()) / (1000 * 60 * 60 * 24));
-                let emoji = '🟢'; if (available === 0) emoji = '🔴'; else if (available <= 1) emoji = '🟠';
-                const roleLock = ws.restrictedRole ? '✨' : '';
-                options.push({ label: ws.restrictedRole ? `${roleLock}Premium Limited` : `Workspace-${index + 1}`, description: `空き: ${available}/${ws.maxSeats} | 残り${daysLeft}日`, value: ws.id, emoji: emoji });
+                
+                let emoji = '🟢';
+                if (available === 0) emoji = '🔴';
+                else if (available <= 1) emoji = '🟠';
+                
+                options.push({
+                    label: `Workspace-${index + 1}`,
+                    description: `空き: ${available}/${ws.maxSeats} | 残り${daysLeft}日`,
+                    value: ws.id,
+                    emoji: emoji
+                });
             });
         }
         
-        const selectMenu = new StringSelectMenuBuilder().setCustomId(`menu_${menuId}`).setPlaceholder('Workspaceを選択').addOptions(options);
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId(`menu_${menuId}`)
+            .setPlaceholder('Workspaceを選択')
+            .addOptions(options);
+        
         const row = new ActionRowBuilder().addComponents(selectMenu);
         
-        const paWorkspaces = workspaces.filter(w => w.isPrivate === true && w.isActivated !== false);
-        const saWorkspaces = workspaces.filter(w => w.isPrivate !== true && w.isActivated !== false);
-        const pendingWorkspaces = workspaces.filter(w => w.isActivated === false);
-        
-        const paAvailable = paWorkspaces.filter(w => (w.maxSeats - w.usedSeats) > 0).length;
-        const paTotal = paWorkspaces.length;
-        const saAvailableSlots = saWorkspaces.reduce((sum, w) => sum + Math.max(0, w.maxSeats - w.usedSeats), 0);
-        const saTotalSlots = saWorkspaces.reduce((sum, w) => sum + w.maxSeats, 0);
-        const pendingTotal = pendingWorkspaces.length;
-        const totalAvailableAccounts = paAvailable + saAvailableSlots;
-        
+        // embedも再作成
         const embed = new EmbedBuilder()
             .setColor(0x0099FF)
-            .setTitle('Select a workspace from the dropdown below')
-            .setDescription(
-                `🎫Available\n` +
-                `${totalAvailableAccounts}Account\n\n` +
-                `🔒Private Account　　👥Shared Account　　🚫Pending Account\n` +
-                `　${paAvailable}/${paTotal}　　　　　　　　${saAvailableSlots}/${saTotalSlots}　　　　　　　　${pendingTotal}/${pendingTotal}`
-            )
+            .setTitle(`📋 ${menu.name}`)
+            .setDescription('利用したいWorkspaceを選択してください\n🔴満席 🟠残りわずか 🟢空きあり')
             .setTimestamp();
         
-        await interaction.update({ embeds: [embed], components: [row] });
+        // 元のメッセージを更新して選択をリセット
+        await interaction.update({
+            embeds: [embed],
+            components: [row]
+        });
     } catch (error) {
         console.error('メニューリセットエラー:', error);
     }
@@ -2321,126 +1630,32 @@ async function handleWorkspaceCommand(interaction) {
 // メニューメッセージ更新
 async function updateMenuMessage(interaction, menu) {
     try {
-        const { ActionRowBuilder, StringSelectMenuBuilder, EmbedBuilder } = require('discord.js');
-        
-        // PASAの場合: 同じメッセージにPAとSAの両方があるか確認
-        const allMenus = getAllMenus();
-        const sameMessageMenus = allMenus.filter(m => m.messageId === menu.messageId);
-        const isCombined = sameMessageMenus.length >= 2 && 
-                          sameMessageMenus.some(m => m.menuType === 'PA') && 
-                          sameMessageMenus.some(m => m.menuType === 'SA');
-        
-        if (isCombined) {
-            // PAとSAを同時に更新
-            const paMenu = sameMessageMenus.find(m => m.menuType === 'PA');
-            const saMenu = sameMessageMenus.find(m => m.menuType === 'SA');
-            
-            // PAオプション
-            const paWorkspaces = getWorkspacesByMenu(paMenu.id);
-            const paOptions = [];
-            if (paWorkspaces.length === 0) {
-                paOptions.push({ label: 'Workspaceがありません', description: '管理者に連絡してください', value: 'none', emoji: '⚠️' });
-            } else {
-                paWorkspaces.forEach((ws, index) => {
-                    if (ws.isActivated === false) {
-                        paOptions.push({ label: `❌WorkSpace-${index + 1}`, description: '未アクティベーション', value: ws.id, emoji: '🔒' });
-                        return;
-                    }
-                    const available = ws.maxSeats - ws.usedSeats;
-                    const daysLeft = Math.ceil((new Date(ws.expiresAt) - new Date()) / (1000 * 60 * 60 * 24));
-                    let emoji = '🟢'; if (available === 0) emoji = '🔴'; else if (available <= 1) emoji = '🟠';
-                    const roleLock = ws.restrictedRole ? '✨' : '';
-                    paOptions.push({ label: ws.restrictedRole ? `${roleLock}Premium Limited` : `Workspace-${index + 1}`, description: `空き: ${available}/${ws.maxSeats} | 残り${daysLeft}日`, value: ws.id, emoji: emoji });
-                });
-            }
-            
-            // SAオプション
-            const saWorkspaces = getWorkspacesByMenu(saMenu.id);
-            const saOptions = [];
-            if (saWorkspaces.length === 0) {
-                saOptions.push({ label: 'Workspaceがありません', description: '管理者に連絡してください', value: 'none', emoji: '⚠️' });
-            } else {
-                saWorkspaces.forEach((ws, index) => {
-                    if (ws.isActivated === false) {
-                        saOptions.push({ label: `❌WorkSpace-${index + 1}`, description: '未アクティベーション', value: ws.id, emoji: '🔒' });
-                        return;
-                    }
-                    const available = ws.maxSeats - ws.usedSeats;
-                    const daysLeft = Math.ceil((new Date(ws.expiresAt) - new Date()) / (1000 * 60 * 60 * 24));
-                    let emoji = '🟢'; if (available === 0) emoji = '🔴'; else if (available <= 1) emoji = '🟠';
-                    const roleLock = ws.restrictedRole ? '✨' : '';
-                    saOptions.push({ label: ws.restrictedRole ? `${roleLock}Premium Limited` : `Workspace-${index + 1}`, description: `空き: ${available}/${ws.maxSeats} | 残り${daysLeft}日`, value: ws.id, emoji: emoji });
-                });
-            }
-            
-            // ドロップダウン作成
-            const paSelectMenu = new StringSelectMenuBuilder()
-                .setCustomId(`menu_${paMenu.id}`)
-                .setPlaceholder('🔒 Private Accountを選択')
-                .addOptions(paOptions);
-            const paRow = new ActionRowBuilder().addComponents(paSelectMenu);
-            
-            const saSelectMenu = new StringSelectMenuBuilder()
-                .setCustomId(`menu_${saMenu.id}`)
-                .setPlaceholder('👥 Shared Accountを選択')
-                .addOptions(saOptions);
-            const saRow = new ActionRowBuilder().addComponents(saSelectMenu);
-            
-            // 統計情報
-            const allWorkspaces = [...paWorkspaces, ...saWorkspaces];
-            console.log(`[DEBUG] updateMenuMessage: PA workspaces=${paWorkspaces.length}, SA workspaces=${saWorkspaces.length}`);
-            console.log(`[DEBUG] All workspaces:`, allWorkspaces.map(w => ({ id: w.id, isActivated: w.isActivated, menuId: w.menuId })));
-            
-            const paActive = paWorkspaces.filter(w => w.isPrivate === true && w.isActivated !== false);
-            const saActive = saWorkspaces.filter(w => w.isPrivate !== true && w.isActivated !== false);
-            const pendingAll = allWorkspaces.filter(w => w.isActivated === false);
-            
-            console.log(`[DEBUG] pendingAll count=${pendingAll.length}, pendingAll:`, pendingAll.map(w => ({ id: w.id, isActivated: w.isActivated })));
-            
-            const paAvailable = paActive.filter(w => (w.maxSeats - w.usedSeats) > 0).length;
-            const paTotal = paActive.length;
-            const saAvailableSlots = saActive.reduce((sum, w) => sum + Math.max(0, w.maxSeats - w.usedSeats), 0);
-            const saTotalSlots = saActive.reduce((sum, w) => sum + w.maxSeats, 0);
-            const pendingTotal = pendingAll.length;
-            
-            console.log(`[DEBUG] pendingTotal=${pendingTotal}`);
-            const totalAvailableAccounts = paAvailable + saAvailableSlots;
-            
-            const embed = new EmbedBuilder()
-                .setColor(0x0099FF)
-                .setTitle('Select a workspace from the dropdown below')
-                .setDescription(
-                    `🎫Available\n` +
-                    `${totalAvailableAccounts}Account\n\n` +
-                    `🔒Private Account　　👥Shared Account　　🚫Pending Account\n` +
-                    `　${paAvailable}/${paTotal}　　　　　　　　${saAvailableSlots}/${saTotalSlots}　　　　　　　　${pendingTotal}/${pendingTotal}`
-                )
-                .setTimestamp();
-            
-            const channel = await interaction.client.channels.fetch(paMenu.channelId);
-            const message = await channel.messages.fetch(paMenu.messageId);
-            
-            await message.edit({ embeds: [embed], components: [paRow, saRow] });
-            return;
-        }
-        
-        // 単一メニューの更新（従来通り）
+        const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
         const workspaces = getWorkspacesByMenu(menu.id);
         
         const options = [];
         if (workspaces.length === 0) {
-            options.push({ label: 'Workspaceがありません', description: '管理者に連絡してください', value: 'none', emoji: '⚠️' });
+            options.push({
+                label: 'Workspaceがありません',
+                description: '管理者に連絡してください',
+                value: 'none',
+                emoji: '⚠️'
+            });
         } else {
             workspaces.forEach((ws, index) => {
-                if (ws.isActivated === false) {
-                    options.push({ label: `❌WorkSpace-${index + 1}`, description: '未アクティベーション（使用不可）', value: ws.id, emoji: '🔒' });
-                    return;
-                }
                 const available = ws.maxSeats - ws.usedSeats;
                 const daysLeft = Math.ceil((new Date(ws.expiresAt) - new Date()) / (1000 * 60 * 60 * 24));
-                let emoji = '🟢'; if (available === 0) emoji = '🔴'; else if (available <= 1) emoji = '🟠';
-                const roleLock = ws.restrictedRole ? '✨' : '';
-                options.push({ label: ws.restrictedRole ? `${roleLock}Premium Limited` : `Workspace-${index + 1}`, description: `空き: ${available}/${ws.maxSeats} | 残り${daysLeft}日`, value: ws.id, emoji: emoji });
+                
+                let emoji = '🟢';
+                if (available === 0) emoji = '🔴';
+                else if (available <= 1) emoji = '🟠';
+                
+                options.push({
+                    label: `Workspace-${index + 1}`,
+                    description: `空き: ${available}/${ws.maxSeats} | 残り${daysLeft}日`,
+                    value: ws.id,
+                    emoji: emoji
+                });
             });
         }
         
@@ -2448,41 +1663,17 @@ async function updateMenuMessage(interaction, menu) {
             .setCustomId(`menu_${menu.id}`)
             .setPlaceholder('Workspaceを選択')
             .addOptions(options);
+        
         const row = new ActionRowBuilder().addComponents(selectMenu);
         
-        const paWorkspaces = workspaces.filter(w => w.isPrivate === true && w.isActivated !== false);
-        const saWorkspaces = workspaces.filter(w => w.isPrivate !== true && w.isActivated !== false);
-        const pendingWorkspaces = workspaces.filter(w => w.isActivated === false);
-        
-        const paAvailable = paWorkspaces.filter(w => (w.maxSeats - w.usedSeats) > 0).length;
-        const paTotal = paWorkspaces.length;
-        const saAvailableSlots = saWorkspaces.reduce((sum, w) => sum + Math.max(0, w.maxSeats - w.usedSeats), 0);
-        const saTotalSlots = saWorkspaces.reduce((sum, w) => sum + w.maxSeats, 0);
-        const pendingTotal = pendingWorkspaces.length;
-        const totalAvailableAccounts = paAvailable + saAvailableSlots;
-        
-        const embed = new EmbedBuilder()
-            .setColor(0x0099FF)
-            .setTitle('Select a workspace from the dropdown below')
-            .setDescription(
-                `🎫Available\n` +
-                `${totalAvailableAccounts}Account\n\n` +
-                `🔒Private Account　　👥Shared Account　　🚫Pending Account\n` +
-                `　${paAvailable}/${paTotal}　　　　　　　　${saAvailableSlots}/${saTotalSlots}　　　　　　　　${pendingTotal}/${pendingTotal}`
-            )
-            .setTimestamp();
-        
         const channel = await interaction.client.channels.fetch(menu.channelId);
-        console.log(`[DEBUG] チャンネル取得: ${channel.name}`);
-        
         const message = await channel.messages.fetch(menu.messageId);
-        console.log(`[DEBUG] メッセージ取得: ${message.id}`);
         
-        await message.edit({ embeds: [embed], components: [row] });
-        console.log(`[DEBUG] メッセージ編集完了`);
+        await message.edit({
+            components: [row]
+        });
     } catch (e) {
-        console.error(`[ERROR] メニュー「${menu.name}」更新エラー:`, e.message);
-        throw e;
+        console.error('メニュー更新エラー:', e);
     }
 }
 
@@ -2695,27 +1886,6 @@ client.on('interactionCreate', async (interaction) => {
                 content: '❌ Workspaceが見つかりません',
                 ephemeral: true
             });
-        }
-        
-        // 未アクティベーションチェック
-        if (workspace.isActivated === false) {
-            await resetMenuSelection(interaction, menuId);
-            return interaction.followUp({
-                content: '❌このワークスペースは、アクティベーションされていません。',
-                ephemeral: true
-            });
-        }
-        
-        // ロール制限チェック
-        if (workspace.restrictedRole) {
-            const member = await interaction.guild.members.fetch(interaction.user.id);
-            if (!member.roles.cache.has(workspace.restrictedRole)) {
-                await resetMenuSelection(interaction, menuId);
-                return interaction.followUp({
-                    content: '🔒 このワークスペースは特定のロールを持つメンバーのみ利用できます。',
-                    ephemeral: true
-                });
-            }
         }
         
         if (workspace.usedSeats >= workspace.maxSeats) {

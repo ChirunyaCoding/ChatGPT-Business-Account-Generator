@@ -118,7 +118,11 @@ function addWorkspace(workspace) {
         createdAt: new Date().toISOString(),
         expiresAt: new Date(Date.now() + (workspace.expiryDays || 30) * 24 * 60 * 60 * 1000).toISOString(),
         status: 'active', // active, full, expired
-        menuId: workspace.menuId || null
+        menuId: workspace.menuId || null,
+        isActivated: workspace.isActivated !== false, // true: アクティベーション済み, false: 未アクティベーション
+        isPrivate: workspace.isPrivate || false, // true: 1人専用（PA）, false: 共有（SA）
+        restrictedRole: workspace.restrictedRole || null, // チケット発行に必要なロールID
+        priority: workspace.priority || 0 // 表示順位（高いほど先頭）
     };
     
     workspaces.push(newWorkspace);
@@ -135,11 +139,13 @@ function getAllWorkspaces() {
 }
 
 /**
- * メニューIDでWorkspace取得
+ * メニューIDでWorkspace取得（priority順でソート）
  */
 function getWorkspacesByMenu(menuId) {
     const workspaces = loadJson(WORKSPACE_FILE, []);
-    return workspaces.filter(w => w.menuId === menuId && w.status !== 'expired');
+    return workspaces
+        .filter(w => w.menuId === menuId && w.status !== 'expired')
+        .sort((a, b) => (b.priority || 0) - (a.priority || 0));
 }
 
 /**
@@ -220,6 +226,7 @@ function addMenu(menu) {
         messageId: null, // ドロップダウンメッセージID
         hidden: menu.hidden || false,
         allowedRoles: menu.allowedRoles || [],
+        menuType: menu.menuType || 'standard', // 'standard', 'PA' (Private Account), 'SA' (Shared Account)
         createdAt: new Date().toISOString()
     };
     
@@ -227,6 +234,73 @@ function addMenu(menu) {
     saveJson(MENU_FILE, menus);
     
     return newMenu;
+}
+
+/**
+ * メニュー別の空き状況を取得
+ * @param {string} menuType - 'PA' | 'SA' | null (全て)
+ */
+function getMenuAvailability(menuType = null) {
+    const menus = loadJson(MENU_FILE, []);
+    const workspaces = loadJson(WORKSPACE_FILE, []);
+    
+    // 対象メニューをフィルタリング
+    const targetMenus = menuType 
+        ? menus.filter(m => m.menuType === menuType)
+        : menus;
+    
+    let totalAvailable = 0;
+    let totalWorkspaces = 0;
+    
+    targetMenus.forEach(menu => {
+        const menuWorkspaces = workspaces.filter(w => 
+            w.menuId === menu.id && 
+            w.status !== 'expired' &&
+            w.isActivated !== false
+        );
+        
+        totalWorkspaces += menuWorkspaces.length;
+        
+        menuWorkspaces.forEach(ws => {
+            if (ws.isPrivate) {
+                // PA（Private Account）: 空きワークスペース数（1つにつき1人専用）
+                // usedSeats === 0 なら1人参加可能
+                if (ws.usedSeats === 0) {
+                    totalAvailable += 1;
+                }
+            } else {
+                // SA（Shared Account）: 空き席数
+                const available = ws.maxSeats - ws.usedSeats;
+                if (available > 0) {
+                    totalAvailable += available;
+                }
+            }
+        });
+    });
+    
+    return {
+        menuCount: targetMenus.length,
+        workspaceCount: totalWorkspaces,
+        availableSlots: totalAvailable
+    };
+}
+
+/**
+ * 特定のメニュータイプに属するワークスペースを取得
+ */
+function getWorkspacesByMenuType(menuType) {
+    const menus = loadJson(MENU_FILE, []);
+    const workspaces = loadJson(WORKSPACE_FILE, []);
+    
+    const targetMenuIds = menus
+        .filter(m => m.menuType === menuType)
+        .map(m => m.id);
+    
+    return workspaces.filter(w => 
+        targetMenuIds.includes(w.menuId) &&
+        w.status !== 'expired' &&
+        w.isActivated !== false
+    );
 }
 
 /**
@@ -381,6 +455,8 @@ module.exports = {
     getMenuByName,
     setMenuVisibility,
     updateMenuMessageId,
+    getMenuAvailability,
+    getWorkspacesByMenuType,
     
     // Ticket
     createTicket,
