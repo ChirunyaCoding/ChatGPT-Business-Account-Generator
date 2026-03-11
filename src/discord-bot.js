@@ -25,7 +25,7 @@ const { checkSession, getSessionStats, clearSession } = require('./paypal_sessio
 // Workspace & Menu 管理モジュール
 const {
     addMenu, removeMenu, getAllMenus, getMenuByName, setMenuVisibility, updateMenuMessageId,
-    addWorkspace, getAllWorkspaces, getWorkspacesByMenu, removeWorkspace, addMemberToWorkspace, cleanupExpiredWorkspaces,
+    addWorkspace, getAllWorkspaces, getWorkspacesByMenu, removeWorkspace, addMemberToWorkspace, activateWorkspaceByEmail, cleanupExpiredWorkspaces,
     createTicket, getTicketByUser, closeTicket, resetAllTickets, removeUserTicket,
     getAccount, getAllAccounts, addAccount, removeAccount, loadAccounts,
     getMenuAvailability, getWorkspacesByMenuType
@@ -2125,12 +2125,31 @@ async function handleWorkspaceCommand(interaction) {
                 
                 child.on('close', async (code) => {
                     if (code === 0) {
+                        // ワークスペースをアクティベート
+                        const activatedWorkspace = activateWorkspaceByEmail(email);
+                        
+                        // メニューを更新（アクティベートしたワークスペースが属するメニュー）
+                        let menuUpdated = false;
+                        if (activatedWorkspace && activatedWorkspace.menuId) {
+                            try {
+                                const menu = getAllMenus().find(m => m.id === activatedWorkspace.menuId);
+                                if (menu) {
+                                    await updateMenuMessage(interaction, menu);
+                                    menuUpdated = true;
+                                    console.log(`[DEBUG] メニュー「${menu.name}」を更新しました`);
+                                }
+                            } catch (menuError) {
+                                console.error('[ERROR] メニュー更新エラー:', menuError);
+                            }
+                        }
+                        
                         const embed = new EmbedBuilder()
                             .setColor(0x00FF00)
                             .setTitle('✅ 無料オファー有効化完了')
                             .setDescription(
                                 `🎉 1ヶ月無料オファーが有効化されました！\n\n` +
-                                `📧 Workspace: \`${email}\``
+                                `📧 Workspace: \`${email}\`` +
+                                (menuUpdated ? '\n\n📋 ドロップダウンメニューを更新しました' : '')
                             )
                             .setTimestamp();
                         

@@ -184,6 +184,38 @@ function addMemberToWorkspace(workspaceId, memberEmail) {
 }
 
 /**
+ * Workspaceをアクティベート（有効化）
+ */
+function activateWorkspace(workspaceId) {
+    const workspaces = loadJson(WORKSPACE_FILE, []);
+    const workspace = workspaces.find(w => w.id === workspaceId);
+    
+    if (!workspace) return null;
+    
+    workspace.isActivated = true;
+    workspace.activatedAt = new Date().toISOString();
+    
+    saveJson(WORKSPACE_FILE, workspaces);
+    return workspace;
+}
+
+/**
+ * メールアドレスでWorkspaceをアクティベート
+ */
+function activateWorkspaceByEmail(email) {
+    const workspaces = loadJson(WORKSPACE_FILE, []);
+    const workspace = workspaces.find(w => w.email === email);
+    
+    if (!workspace) return null;
+    
+    workspace.isActivated = true;
+    workspace.activatedAt = new Date().toISOString();
+    
+    saveJson(WORKSPACE_FILE, workspaces);
+    return workspace;
+}
+
+/**
  * 期限切れWorkspaceを自動削除
  */
 function cleanupExpiredWorkspaces() {
@@ -446,6 +478,8 @@ module.exports = {
     getWorkspacesByMenu,
     removeWorkspace,
     addMemberToWorkspace,
+    activateWorkspace,
+    activateWorkspaceByEmail,
     cleanupExpiredWorkspaces,
     
     // Menu
