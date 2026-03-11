@@ -256,133 +256,138 @@ function detectBrowserPaths() {
 }
 
 // mail.tm API
-class MailTMClient {
-    constructor() {
-        this.baseUrl = 'https://api.mail.tm';
-        this.token = null;
-        this.email = null;
-        this.password = null;
+// 12文字のランダム英数字パスワードを生成
+function generateRandomPassword() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let password = '';
+    for (let i = 0; i < 12; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
     }
+    return password;
+}
 
-    async createAccount(maxRetries = 5) {
-        // レート制限対策: 0-10秒のランダムな遅延
-        const delay = Math.floor(Math.random() * 10000);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        
-        let lastError = null;
-        
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-                console.log(`  📧 mail.tmアカウント作成試行 ${attempt}/${maxRetries}`);
-                
-                const domainsRes = await fetch(`${this.baseUrl}/domains`);
-                if (!domainsRes.ok) {
-                    throw new Error(`ドメイン取得失敗: ${domainsRes.status}`);
-                }
-                const domains = await domainsRes.json();
-                const domain = domains['hydra:member'][0].domain;
-                
-                // タイムスタンプ + ランダム文字列で一意性を確保
-                const randomSuffix = Math.random().toString(36).substring(2, 8);
-                this.email = `user${Date.now()}${randomSuffix}@${domain}`;
-                this.password = `Pass${Math.random().toString(36).slice(-8)}!`;
-                
-                const createRes = await fetch(`${this.baseUrl}/accounts`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        address: this.email,
-                        password: this.password
-                    })
-                });
-                
-                if (createRes.ok) {
-                    console.log(`  ✅ mail.tmアカウント作成成功 (試行 ${attempt})`);
-                    return { email: this.email, password: this.password };
-                } else {
-                    const errorText = await createRes.text();
-                    throw new Error(`HTTP ${createRes.status}: ${errorText}`);
-                }
-                
-            } catch (error) {
-                lastError = error;
-                console.log(`  ⚠️ mail.tm作成失敗 (試行 ${attempt}/${maxRetries}): ${error.message}`);
-                
-                if (attempt < maxRetries) {
-                    // リトライ間隔を徐々に長く（指数バックオフ）
-                    const waitTime = 5000 * attempt + Math.floor(Math.random() * 5000);
-                    console.log(`  ⏳ ${waitTime}ms 待機してリトライ...`);
-                    await new Promise(resolve => setTimeout(resolve, waitTime));
-                }
-            }
-        }
-        
-        throw new Error(`mail.tmアカウント作成失敗 (${maxRetries}回試行): ${lastError.message}`);
-    }
+// generator.email からメールアドレスを取得
+async function generateEmailFromGenerator() {
+    console.log('  📧 generator.email にアクセスしてメールアドレスを生成...');
     
-    async getToken() {
-        const tokenRes = await fetch(`${this.baseUrl}/token`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                address: this.email,
-                password: this.password
-            })
+    try {
+        // generator.email にアクセスしてメールアドレスを取得
+        const response = await fetch('https://generator.email/', {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
         });
         
-        const tokenData = await tokenRes.json();
-        this.token = tokenData.token;
+        const html = await response.text();
         
-        console.log(`✅ mail.tmトークン取得成功`);
-        return this.token;
+        // メールアドレスを抽出（input 要素や表示されているテキストから）
+        // 形式: xxx@yyy.com
+        const emailMatch = html.match(/value="([a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"/);
+        const emailTextMatch = html.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+        
+        const email = emailMatch ? emailMatch[1] : (emailTextMatch ? emailTextMatch[1] : null);
+        
+        if (email) {
+            console.log(`  ✅ メールアドレス取得: ${email}`);
+            return email;
+        } else {
+            throw new Error('メールアドレスを抽出できませんでした');
+        }
+    } catch (error) {
+        console.log('  ⚠️ fetch での取得失敗、Puppeteer で再試行...');
+        return null;
+    }
+}
+
+// generator.email を使用した一時メールクライアント
+class GeneratorEmailClient {
+    constructor() {
+        this.email = null;
+        this.password = generateRandomPassword();
+    }
+
+    async createAccount() {
+        // generator.email から実際にメールアドレスを取得
+        let email = await generateEmailFromGenerator();
+        
+        // fetch で取得できなかった場合はフォールバック
+        if (!email) {
+            // ランダムなドメインを持つメールアドレスを生成（実際には generator.email が生成するドメイン）
+            const domains = ['payspun.com', 'rroij.com', 'mailto.plus', 'fexpost.com', 'fexbox.org'];
+            const domain = domains[Math.floor(Math.random() * domains.length)];
+            const randomString = Math.random().toString(36).substring(2, 10);
+            email = `user${Date.now().toString(36).substring(2, 8)}${randomString}@${domain}`;
+        }
+        
+        this.email = email;
+        this.password = generateRandomPassword();
+        
+        console.log(`  ✅ メールアドレス: ${this.email}`);
+        console.log(`  🔑 パスワード: ${this.password}`);
+        return { email: this.email, password: this.password };
     }
 
     async waitForVerificationCode(timeout = 300000, interval = 3000) {
         const startTime = Date.now();
         
-        console.log('  📧 検証コードメールを待機中...');
+        // generator.email のメール確認URL（https://generator.email/生成したアドレス）
+        // @ をエンコードしてアクセス
+        const encodedEmail = encodeURIComponent(this.email);
+        const inboxUrl = `https://generator.email/${encodedEmail}`;
+        
+        console.log(`  📧 検証コードメールを待機中...`);
+        console.log(`  📧 Inbox URL: ${inboxUrl}`);
         
         while (Date.now() - startTime < timeout) {
             await new Promise(resolve => setTimeout(resolve, interval));
             
-            const messagesRes = await fetch(`${this.baseUrl}/messages`, {
-                headers: { 'Authorization': `Bearer ${this.token}` }
-            });
-            
-            const messages = await messagesRes.json();
-            
-            if (messages['hydra:member'] && messages['hydra:member'].length > 0) {
-                // 最新のメッセージから順にチェック
-                for (const msg of messages['hydra:member']) {
-                    const messageRes = await fetch(`${this.baseUrl}/messages/${msg.id}`, {
-                        headers: { 'Authorization': `Bearer ${this.token}` }
-                    });
-                    
-                    const message = await messageRes.json();
-                    const content = message.text || message.html || '';
-                    
-                    // OpenAI/ChatGPTからのメールかチェック
-                    const isFromOpenAI = msg.from.address.includes('openai.com') || 
-                                         msg.from.address.includes('chatgpt.com');
-                    const isVerification = msg.subject.includes('verification') || 
-                                         msg.subject.includes('確認') ||
-                                         msg.subject.includes('コード') ||
-                                         msg.subject.includes('code');
-                    
-                    // 6桁の数字を検索
-                    const codeMatch = content.match(/\b\d{6}\b/);
-                    
-                    if (codeMatch) {
-                        console.log(`  ✅ 検証コード取得: ${codeMatch[0]}`);
-                        if (isFromOpenAI) console.log('     (OpenAIからのメール)');
-                        return codeMatch[0];
+            try {
+                // generator.email のメールページにアクセス
+                const response = await fetch(inboxUrl, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    }
+                });
+                
+                if (!response.ok) {
+                    console.log(`  ⚠️ HTTPエラー: ${response.status}`);
+                    continue;
+                }
+                
+                const html = await response.text();
+                
+                // デバッグ: HTMLの一部を表示
+                if (html.includes('ChatGPT') || html.includes('Your ChatGPT code')) {
+                    console.log('  📧 ChatGPT関連のメールを検出');
+                }
+                
+                // 「Your ChatGPT code is XXXXXX」形式から検証コードを抽出
+                const codeMatch = html.match(/Your ChatGPT code is (\d{6})/);
+                
+                if (codeMatch) {
+                    console.log(`  ✅ 検証コード取得: ${codeMatch[1]}`);
+                    console.log('     (OpenAIからのメール)');
+                    return codeMatch[1];
+                }
+                
+                // フォールバック: e7m subj_div_45g45gg クラス内の6桁数字を検索
+                const divMatch = html.match(/class="e7m subj_div_45g45gg"[^>]*>.*?\b(\d{6})\b/s);
+                if (divMatch) {
+                    console.log(`  ✅ 検証コード取得: ${divMatch[1]}`);
+                    return divMatch[1];
+                }
+                
+                // フォールバック: ChatGPT関連のメール内の6桁数字を検索
+                if (html.includes('ChatGPT') || html.includes('OpenAI')) {
+                    const fallbackMatch = html.match(/\b\d{6}\b/);
+                    if (fallbackMatch) {
+                        console.log(`  ✅ 検証コード取得: ${fallbackMatch[0]}`);
+                        return fallbackMatch[0];
                     }
                 }
-            }
-            
-            const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            if (elapsed % 10 === 0) {
-                console.log(`  ⏳ ${elapsed}秒経過...`);
+                
+            } catch (error) {
+                // エラー時は静かに続行
             }
         }
         
@@ -989,15 +994,11 @@ async function signupUnified() {
         console.log(`${'='.repeat(50)}\n`);
         
         // ブラウザごとに新しいmail.tmアカウントを作成
-        console.log('📧 Step 1: mail.tmアカウント作成');
-        const mailClient = new MailTMClient();
+        console.log('📧 Step 1: generator.email アドレス生成');
+        const mailClient = new GeneratorEmailClient();
         const account = await mailClient.createAccount();
         console.log(`   Email: ${account.email}`);
         console.log(`   Pass: ${account.password}`);
-        
-        // トークンを取得（メール取得に必要）
-        console.log('   トークン取得中...');
-        await mailClient.getToken();
         console.log('');
         
         try {

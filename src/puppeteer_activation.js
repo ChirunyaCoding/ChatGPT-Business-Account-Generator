@@ -87,60 +87,55 @@ async function generateFrenchAddress() {
     }
 }
 
-// mail.tm APIで検証コード取得
-async function getVerificationCode(email, password, maxRetries = 10) {
+// 12文字のランダム英数字パスワードを生成
+function generateRandomPassword() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let password = '';
+    for (let i = 0; i < 12; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+}
+
+// generator.email で検証コード取得（見つかるまで無限ループ）
+async function getVerificationCode(email, password) {
     console.log('📧 検証コードを取得中...');
     
-    try {
+    const username = email.split('@')[0];
+    const inboxUrl = `https://generator.email/${email}`;
+    
+    console.log(`  📧 Inbox URL: ${inboxUrl}`);
+    
+    // メールを見つかるまで無限ループ
+    while (true) {
         try {
-            await httpRequest('https://api.mail.tm/accounts', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ address: email, password: password })
-            });
-        } catch (e) {}
-        
-        const tokenRes = await httpRequest('https://api.mail.tm/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ address: email, password: password })
-        });
-        const token = tokenRes.token;
-        
-        for (let i = 0; i < maxRetries; i++) {
-            console.log(`  ⏳ メール待機... (${i + 1}/${maxRetries})`);
-            await sleep(5000);
+            await sleep(3000);
             
-            const messagesRes = await httpRequest('https://api.mail.tm/messages', {
-                headers: { 'Authorization': `Bearer ${token}` }
+            // generator.email のメールページにアクセス
+            const html = await httpRequest(inboxUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
             });
             
-            const messages = messagesRes['hydra:member'];
+            // 「Your ChatGPT code is XXXXXX」形式から検証コードを抽出
+            const codeMatch = html.match(/Your ChatGPT code is (\d{6})/);
+            if (codeMatch) {
+                console.log(`  ✅ 検証コード: ${codeMatch[1]}`);
+                return codeMatch[1];
+            }
             
-            for (const msg of messages) {
-                if (msg.from.address.includes('openai.com') || 
-                    msg.subject.includes('ChatGPT') ||
-                    msg.subject.includes('verification')) {
-                    
-                    const messageRes = await httpRequest(
-                        `https://api.mail.tm/messages/${msg.id}`,
-                        { headers: { 'Authorization': `Bearer ${token}` } }
-                    );
-                    
-                    const content = messageRes.text || messageRes.html;
-                    const codeMatch = content.match(/\b\d{6}\b/);
-                    if (codeMatch) {
-                        console.log(`  ✅ 検証コード: ${codeMatch[0]}`);
-                        return codeMatch[0];
-                    }
+            // フォールバック: ChatGPT関連のメール内の6桁数字を検索
+            if (html.includes('ChatGPT') || html.includes('OpenAI')) {
+                const fallbackMatch = html.match(/\b\d{6}\b/);
+                if (fallbackMatch) {
+                    console.log(`  ✅ 検証コード: ${fallbackMatch[0]}`);
+                    return fallbackMatch[0];
                 }
             }
+        } catch (error) {
+            // エラーが出ても続行
         }
-        
-        return null;
-    } catch (error) {
-        console.error('  ❌ メール取得エラー:', error.message);
-        return null;
     }
 }
 
@@ -340,12 +335,12 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         }
         await sleep(5000);
         
-        // パスワードまたは検証コードを待機（最大30秒）
+        // パスワードまたは検証コードを待機（見つかるまで無限ループ）
         console.log('  ⏳ パスワードまたは検証コード入力欄を待機中...');
         let passwordInput = null;
         let codeInput = null;
         
-        for (let i = 0; i < 10; i++) {
+        while (true) {
             passwordInput = await page.$('input[type="password"], input[name="password"]').catch(() => null);
             codeInput = await page.$('input[maxlength="6"], input[autocomplete="one-time-code"], input[data-testid="otp-input"]').catch(() => null);
             
@@ -353,7 +348,6 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
                 break;
             }
             
-            console.log(`    待機中... (${i + 1}/10)`);
             await sleep(1000);
         }
         
@@ -410,66 +404,45 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         }
         await sleep(5000);
         
-        // ログイン成功を確認
+        // ログイン成功を確認（成功するまで無限ループ）
         console.log('  🔍 ログイン状態を確認中...');
-        const isLoggedIn = await page.evaluate(() => {
-            // ログイン成功の指標をチェック
-            return window.location.href.includes('/c/') || 
-                   window.location.href.includes('/g/') ||
-                   document.querySelector('[data-testid="profile-button"]') !== null ||
-                   document.querySelector('[data-testid="logout-button"]') !== null ||
-                   document.querySelector('button[aria-label="Settings"]') !== null ||
-                   document.querySelector('nav') !== null;
-        });
-        
-        if (isLoggedIn) {
-            console.log('  ✅ ログイン成功を確認しました');
-        } else {
-            console.log('  ⚠️ ログイン状態が不明です。URL:', await page.url());
+        while (true) {
+            const isLoggedIn = await page.evaluate(() => {
+                return window.location.href.includes('/c/') || 
+                       window.location.href.includes('/g/') ||
+                       document.querySelector('[data-testid="profile-button"]') !== null ||
+                       document.querySelector('[data-testid="logout-button"]') !== null ||
+                       document.querySelector('button[aria-label="Settings"]') !== null ||
+                       document.querySelector('nav') !== null;
+            });
+            
+            if (isLoggedIn) {
+                console.log('  ✅ ログイン成功を確認しました');
+                break;
+            }
+            
+            await sleep(2000);
         }
         await sleep(3000);
         
         // ===== 2. 無料オファー画面へ =====
         console.log('\n🎁 Step 2: Get Free Offer');
         
-        // SPA対応: URLハッシュを変更して料金ページへ遷移
+        // 料金ページへ移動（読み込まれるまで無限ループ）
         console.log('  🔄 料金ページへ移動中...');
         
-        // 方法1: JavaScriptでハッシュ変更
         await page.evaluate(() => {
             window.location.hash = '#pricing';
         });
         
-        // ページ遷移を待機（URLが変わるのを待つ）
-        await page.waitForFunction(() => window.location.hash === '#pricing', { timeout: 30000 });
-        console.log('  ✅ URLハッシュを #pricing に変更しました');
-        
-        // ページコンテンツが読み込まれるまで待機（最大10秒）
-        console.log('  ⏳ ページコンテンツの読み込みを待機中...');
-        await sleep(5000);
-        
-        // 料金ページが読み込まれたかチェック
-        const isPricingLoaded = await page.evaluate(() => {
-            return document.querySelector('[data-testid="select-plan-button-teams-create"]') !== null ||
-                   document.querySelector('button[class*="purple"]') !== null ||
-                   Array.from(document.querySelectorAll('button')).some(b => 
-                       b.textContent.includes('無料オファー') || 
-                       b.textContent.includes('Get the free offer') ||
-                       b.textContent.includes('Upgrade')
-                   );
-        });
-        
-        // 方法2: ハッシュ変更だけでは読み込まれない場合は直接URLにアクセス
-        if (!isPricingLoaded) {
-            console.log('  ⚠️ ハッシュ変更では読み込まれませんでした。直接アクセスを試みます...');
-            await safeGoto(page, 'https://chatgpt.com/#pricing');
-            console.log('  ✅ 料金ページに直接アクセスしました');
-            await sleep(5000);
+        // 料金ページの要素が読み込まれるまで無限ループ
+        while (true) {
+            await sleep(2000);
             
-            // まだ読み込まれていない場合はページをリロード
-            const stillNotLoaded = await page.evaluate(() => {
-                return document.querySelector('[data-testid="select-plan-button-teams-create"]') === null &&
-                       !Array.from(document.querySelectorAll('button')).some(b => 
+            const isLoaded = await page.evaluate(() => {
+                return document.querySelector('[data-testid="select-plan-button-teams-create"]') !== null ||
+                       document.querySelector('button[class*="purple"]') !== null ||
+                       Array.from(document.querySelectorAll('button')).some(b => 
                            b.textContent.includes('無料オファー') || 
                            b.textContent.includes('Get the free offer') ||
                            b.textContent.includes('Upgrade') ||
@@ -477,13 +450,18 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
                        );
             });
             
-            if (stillNotLoaded) {
-                console.log('  🔄 ページをリロードします...');
-                await page.reload({ waitUntil: 'networkidle2' });
-                await sleep(5000);
+            if (isLoaded) {
+                console.log('  ✅ 料金ページが読み込まれました');
+                break;
             }
-        } else {
-            console.log('  ✅ 料金ページのコンテンツが読み込まれました');
+            
+            // 一定間隔で直接アクセスも試行
+            const currentUrl = await page.url();
+            if (!currentUrl.includes('#pricing')) {
+                await page.evaluate(() => {
+                    window.location.hash = '#pricing';
+                });
+            }
         }
         await sleep(3000);
         
@@ -520,53 +498,52 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
                 console.log('  ✅ 無料オファーボタンを検出してクリックしました（テキスト検索）');
                 await sleep(30000); // 30秒待機（iframe読み込み待ち）
             } else {
-                console.log('  ⚠️ 無料オファーボタンが見つかりませんでした');
-                
-                // 方法3: 「Upgrade」「Subscribe」などの代替ボタンを探す
-                console.log('  🔘 代替ボタン（Upgrade/Subscribe）を探しています...');
-                const alternativeClicked = await page.evaluate(() => {
-                    const buttons = Array.from(document.querySelectorAll('button, a[role="button"]'));
-                    const btn = buttons.find(b => {
-                        const text = b.textContent.trim().toLowerCase();
-                        return text.includes('upgrade') ||
-                               text.includes('subscribe') ||
-                               text.includes('plan') ||
-                               text.includes('プラン') ||
-                               text.includes('アップグレード');
+                // 見つかるまで無限ループで探す
+                while (true) {
+                    const found = await page.evaluate(() => {
+                        const buttons = Array.from(document.querySelectorAll('button[class*="purple"], button[class*="btn-"], button'));
+                        const btn = buttons.find(b => {
+                            const text = b.textContent.trim();
+                            return text === '無料オファーを受け取る' ||
+                                   text.includes('無料オファー') ||
+                                   text === 'Get the free offer' ||
+                                   text.includes('Start your free trial') ||
+                                   text.toLowerCase().includes('upgrade') ||
+                                   text.toLowerCase().includes('subscribe');
+                        });
+                        if (btn) {
+                            btn.click();
+                            return true;
+                        }
+                        return false;
                     });
-                    if (btn) {
-                        btn.click();
-                        return true;
+                    
+                    if (found) {
+                        console.log('  ✅ 無料オファーボタンを検出してクリックしました');
+                        await sleep(30000);
+                        break;
                     }
-                    return false;
-                });
-                
-                if (alternativeClicked) {
-                    console.log('  ✅ Upgrade/Subscribeボタンをクリックしました');
-                    await sleep(10000);
+                    
+                    await sleep(1000);
                 }
-                
-                // デバッグ用にスクリーンショットを取得
-                try {
-                    await page.screenshot({ path: 'debug_pricing_page.png' });
-                    console.log('  📸 スクリーンショットを保存しました: debug_pricing_page.png');
-                } catch (e) {}
             }
         }
         
         // ===== 4. PayPalタブ選択 =====
         console.log('\n💳 Step 4: PayPal Selection');
         
-        // まずStripeのiframeを探す
+        // まずStripeのiframeを探す（見つかるまで無限ループ）
         let stripeFrame = null;
-        try {
-            const stripeIframe = await page.waitForSelector('iframe[src*="stripe"], iframe[name*="stripe"]', { timeout: 10000 });
-            if (stripeIframe) {
-                stripeFrame = await stripeIframe.contentFrame();
-                console.log('  ✅ Stripe iframeを検出しました');
-            }
-        } catch (e) {
-            console.log('  ℹ️ Stripe iframeが見つかりませんでした');
+        while (!stripeFrame) {
+            try {
+                const stripeIframe = await page.$('iframe[src*="stripe"], iframe[name*="stripe"]');
+                if (stripeIframe) {
+                    stripeFrame = await stripeIframe.contentFrame();
+                    console.log('  ✅ Stripe iframeを検出しました');
+                    break;
+                }
+            } catch (e) {}
+            await sleep(1000);
         }
         
         // PayPalタブを探してクリック
@@ -689,7 +666,6 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         // 住所入力用iframeが見つからない場合は、元のstripeFrameを使う
         if (!addressFrame) {
             addressFrame = stripeFrame;
-            console.log('  ℹ️ Address iframe not found. Using existing iframe');
         }
         
         // iframe情報をデバッグ表示
@@ -872,17 +848,17 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
             console.log('      ⚠️ page.evaluate() failed:', e.message);
         }
         
-        // 方法2: Puppeteerのtype()を使用（フォールバック）
-        if (!inputSuccess) {
-            console.log('    📝 Trying Puppeteer type() method...');
+        // 方法2: addressFrame経由でtype()（クロスオリジンiframe対応）
+        if (!inputSuccess && addressFrame) {
+            console.log('    📝 Trying addressFrame.type() method...');
             let successCount = 0;
-            
-            // ヘルパー関数
-            async function findAndType(selectors, value, fieldName) {
+
+            async function findAndTypeInFrame(frame, selectors, value, fieldName) {
                 for (const selector of selectors) {
                     try {
-                        const el = await page.waitForSelector(selector, { timeout: 2000 });
+                        const el = await frame.waitForSelector(selector, { timeout: 3000, visible: true });
                         if (el) {
+                            await el.click({ clickCount: 3 });
                             await el.type(value, { delay: 30 });
                             console.log(`      ✅ ${fieldName}: ${value}`);
                             return true;
@@ -891,25 +867,24 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
                 }
                 return false;
             }
-            
-            // 各フィールドを入力
-            if (await findAndType(['#billingAddress-nameInput'], address.name, 'Name')) successCount++;
+
+            if (await findAndTypeInFrame(addressFrame, ['#billingAddress-nameInput', 'input[name="name"]', 'input[autocomplete*="name"]'], address.name, 'Name')) successCount++;
             await sleep(200);
-            
+
             try {
-                const country = await page.waitForSelector('#billingAddress-countryInput', { timeout: 2000 });
+                const country = await addressFrame.waitForSelector('#billingAddress-countryInput, select[name="country"]', { timeout: 2000 });
                 if (country) { await country.select('FR'); console.log('      ✅ Country: France'); successCount++; }
             } catch (e) {}
             await sleep(200);
-            
-            if (await findAndType(['#billingAddress-addressLine1Input'], address.street, 'Address')) successCount++;
+
+            if (await findAndTypeInFrame(addressFrame, ['#billingAddress-addressLine1Input', 'input[name="addressLine1"]'], address.street, 'Address')) successCount++;
             await sleep(200);
-            
-            if (await findAndType(['#billingAddress-postalCodeInput'], address.postalCode, 'Postal Code')) successCount++;
+
+            if (await findAndTypeInFrame(addressFrame, ['#billingAddress-postalCodeInput', 'input[name="postalCode"]'], address.postalCode, 'Postal Code')) successCount++;
             await sleep(200);
-            
-            if (await findAndType(['#billingAddress-localityInput'], address.city, 'City')) successCount++;
-            
+
+            if (await findAndTypeInFrame(addressFrame, ['#billingAddress-localityInput', 'input[name="city"]', 'input[name="locality"]'], address.city, 'City')) successCount++;
+
             inputSuccess = successCount >= 3;
         }
         
@@ -946,6 +921,81 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
             }
             
             await sleep(2000);
+        }
+        
+        // エラーモニター関数：不明なエラーを検出して「もう一度試す」をクリック
+        async function monitorAndRetryError() {
+            console.log('  🔍 エラーモニターを開始...');
+            
+            const maxCheckAttempts = 60; // 最大60回チェック（約2分）
+            for (let i = 0; i < maxCheckAttempts; i++) {
+                await sleep(2000); // 2秒ごとにチェック
+                
+                try {
+                    // 不明なエラーメッセージを検出
+                    const hasUnknownError = await page.evaluate(() => {
+                        const errorElements = document.querySelectorAll('span._root_xeddl_1, .error-message, div[class*="error"]');
+                        for (const el of errorElements) {
+                            const text = el.textContent;
+                            if (text && (text.includes('不明なエラーが発生しました') || text.includes('An unknown error occurred'))) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    });
+                    
+                    if (hasUnknownError) {
+                        console.log('  ⚠️ 不明なエラーを検出しました。「もう一度試す」ボタンを探します...');
+                        
+                        // 「もう一度試す」ボタンを探してクリック
+                        const retryClicked = await page.evaluate(() => {
+                            const buttons = Array.from(document.querySelectorAll('button'));
+                            const retryBtn = buttons.find(b => {
+                                const text = b.textContent.trim();
+                                return text.includes('もう一度試す') || 
+                                       text.includes('Try again') ||
+                                       b.getAttribute('data-dd-action-name') === 'Try again';
+                            });
+                            if (retryBtn) {
+                                retryBtn.click();
+                                return true;
+                            }
+                            return false;
+                        });
+                        
+                        if (retryClicked) {
+                            console.log('  ✅ 「もう一度試す」ボタンをクリックしました。処理を継続します...');
+                            await sleep(5000); // リトライ後の読み込み待機
+                            return true; // リトライ成功
+                        } else {
+                            console.log('  ⚠️ 「もう一度試す」ボタンが見つかりませんでした');
+                        }
+                    }
+                    
+                    // 成功メッセージや次の画面が表示されたら終了
+                    const isSuccess = await page.evaluate(() => {
+                        return document.querySelector('[data-testid="success"]') !== null ||
+                               document.querySelector('.success-message') !== null ||
+                               window.location.href.includes('/success');
+                    });
+                    
+                    if (isSuccess) {
+                        console.log('  ✅ 成功画面が検出されました');
+                        return false; // 成功したので監視終了
+                    }
+                    
+                } catch (e) {
+                    // エラーが発生しても続行
+                }
+                
+                // 30秒ごとに進捗を表示
+                if (i % 15 === 0 && i > 0) {
+                    console.log(`  ⏳ エラーモニター実行中... (${i * 2}秒経過)`);
+                }
+            }
+            
+            console.log('  ℹ️ エラーモニターを終了します');
+            return false;
         }
         
         // ===== 6. サブスクリプション登録（Subscribeボタン） =====
@@ -995,20 +1045,49 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
             return clicked ? 'page' : false;
         }
         
-        const subscribeSource = await findAndClickButton(['subscribe', 'start trial', 'start your free', 'get started', 'continue', '登録', '開始']);
-        if (subscribeSource) {
-            console.log(`  ✅ Subscribeボタンをクリックしました (${subscribeSource})`);
-            await sleep(5000);
+        // Subscribeボタンを見つかるまで探す
+        console.log('  🔘 Subscribeボタンを探しています...');
+        while (true) {
+            const subscribeSource = await findAndClickButton(['subscribe', 'start trial', 'start your free', 'get started', 'continue', '登録', '開始']);
+            if (subscribeSource) {
+                console.log(`  ✅ Subscribeボタンをクリックしました (${subscribeSource})`);
+                await sleep(5000);
+                
+                // エラーモニター開始
+                const retried = await monitorAndRetryError();
+                if (retried) {
+                    console.log('  🔄 エラーが検出されてリトライしました。処理を継続します...');
+                }
+                break;
+            }
+            await sleep(1000);
         }
         
         // ===== 7. 同意して続行（必要な場合） =====
         console.log('\n✅ Step 7: Confirm');
-        await sleep(3000);
         
-        const consentSource = await findAndClickButton(['agree', 'confirm', 'pay', 'complete', '同意', '確定', 'authorize']);
-        if (consentSource) {
-            console.log(`  ✅ 同意/確定ボタンをクリックしました (${consentSource})`);
-            await sleep(5000);
+        // 同意ボタンを見つかるまで探す
+        while (true) {
+            const consentSource = await findAndClickButton(['agree', 'confirm', 'pay', 'complete', '同意', '確定', 'authorize']);
+            if (consentSource) {
+                console.log(`  ✅ 同意/確定ボタンをクリックしました (${consentSource})`);
+                await sleep(5000);
+                
+                // エラーモニター開始
+                const retried2 = await monitorAndRetryError();
+                if (retried2) {
+                    console.log('  🔄 エラーが検出されてリトライしました。処理を継続します...');
+                }
+                break;
+            }
+            await sleep(1000);
+        }
+        
+        // 最終エラーチェック
+        console.log('  🔍 最終エラーチェック...');
+        const finalRetried = await monitorAndRetryError();
+        if (finalRetried) {
+            console.log('  🔄 最終チェックでエラーが検出されてリトライしました');
         }
         
         console.log('\n🎉 Complete! 1-month free offer activated!');

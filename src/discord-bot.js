@@ -2113,17 +2113,107 @@ async function handleWorkspaceCommand(interaction) {
                     }
                 });
                 
+                // 不明なエラーを検出して自動リトライ
+                let unknownErrorCount = 0;
+                const maxRetries = 3;
+                
                 child.stdout.on('data', (data) => {
-                    stdout += data.toString();
-                    console.log(data.toString());
+                    const output = data.toString();
+                    stdout += output;
+                    console.log(output);
+                    
+                    // 不明なエラーを検出
+                    if (output.includes('不明なエラーが発生しました') || output.includes('An unknown error occurred')) {
+                        unknownErrorCount++;
+                        console.log(`⚠️ 不明なエラーを検出: ${unknownErrorCount}/${maxRetries}`);
+                    }
                 });
                 
                 child.stderr.on('data', (data) => {
-                    stderr += data.toString();
-                    console.error(data.toString());
+                    const output = data.toString();
+                    stderr += output;
+                    console.error(output);
+                    
+                    // stderr でも不明なエラーを検出
+                    if (output.includes('不明なエラーが発生しました') || output.includes('An unknown error occurred')) {
+                        unknownErrorCount++;
+                        console.log(`⚠️ 不明なエラーを検出(stderr): ${unknownErrorCount}/${maxRetries}`);
+                    }
                 });
                 
+                // リトライ用の関数
+                const runActivation = async (retryCount = 0) => {
+                    return new Promise((resolve, reject) => {
+                        const retryChild = spawn(nodePath, [scriptPath, email, password], {
+                            env: { 
+                                ...process.env, 
+                                PATH: process.platform === 'darwin' ? '/opt/homebrew/bin:' + process.env.PATH : process.env.PATH
+                            }
+                        });
+                        
+                        let retryStdout = '';
+                        let retryStderr = '';
+                        let retryUnknownErrorCount = 0;
+                        
+                        retryChild.stdout.on('data', (data) => {
+                            const output = data.toString();
+                            retryStdout += output;
+                            console.log(`[Retry ${retryCount}] ${output}`);
+                            
+                            if (output.includes('不明なエラーが発生しました') || output.includes('An unknown error occurred')) {
+                                retryUnknownErrorCount++;
+                            }
+                        });
+                        
+                        retryChild.stderr.on('data', (data) => {
+                            const output = data.toString();
+                            retryStderr += output;
+                            console.error(`[Retry ${retryCount}] ${output}`);
+                            
+                            if (output.includes('不明なエラーが発生しました') || output.includes('An unknown error occurred')) {
+                                retryUnknownErrorCount++;
+                            }
+                        });
+                        
+                        retryChild.on('close', (retryCode) => {
+                            resolve({
+                                code: retryCode,
+                                stdout: retryStdout,
+                                stderr: retryStderr,
+                                unknownErrorCount: retryUnknownErrorCount
+                            });
+                        });
+                    });
+                };
+                
                 child.on('close', async (code) => {
+                    // 不明なエラーが検出された場合はリトライ
+                    if (unknownErrorCount > 0 && code !== 0) {
+                        console.log(`🔄 不明なエラーが検出されたためリトライします...`);
+                        await interaction.editReply({
+                            content: `⚠️ 不明なエラーが検出されました。リトライします... (${unknownErrorCount}回検出)`
+                        });
+                        
+                        // 最大3回リトライ
+                        for (let i = 1; i <= maxRetries; i++) {
+                            console.log(`🔄 リトライ ${i}/${maxRetries}`);
+                            await interaction.editReply({
+                                content: `🔄 リトライ ${i}/${maxRetries}...`
+                            });
+                            
+                            const result = await runActivation(i);
+                            
+                            if (result.code === 0) {
+                                console.log(`✅ リトライ ${i}回目で成功しました`);
+                                code = 0;
+                                stdout = result.stdout;
+                                break;
+                            } else {
+                                console.log(`❌ リトライ ${i}回目で失敗: 不明なエラー${result.unknownErrorCount}回検出`);
+                            }
+                        }
+                    }
+                    
                     if (code === 0) {
                         // ワークスペースをアクティベート
                         const activatedWorkspace = activateWorkspaceByEmail(email);
