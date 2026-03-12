@@ -16,7 +16,25 @@ function isUnknownInteractionError(error) {
     return typeof error.message === 'string' && error.message.includes('Unknown interaction');
 }
 
+function isAlreadyAcknowledgedInteractionError(error) {
+    if (!error || typeof error !== 'object') {
+        return false;
+    }
+
+    const code = error.code ?? error.rawError?.code;
+    if (code === 40060) {
+        return true;
+    }
+
+    return typeof error.message === 'string' && error.message.includes('already been acknowledged');
+}
+
 async function safeDeferReply(interaction, payload) {
+    if (interaction?.deferred || interaction?.replied) {
+        // 既にACK済みのためdeferをスキップして継続する
+        return true;
+    }
+
     try {
         await interaction.deferReply(payload);
         return true;
@@ -24,6 +42,10 @@ async function safeDeferReply(interaction, payload) {
         if (isUnknownInteractionError(error)) {
             console.warn('⚠️ 期限切れのInteractionのためdeferReplyをスキップしました (10062)');
             return false;
+        }
+        if (isAlreadyAcknowledgedInteractionError(error)) {
+            console.warn('⚠️ 既にACK済みのInteractionのためdeferReplyをスキップしました (40060)');
+            return true;
         }
         throw error;
     }
@@ -44,6 +66,7 @@ async function safeEditReply(interaction, payload) {
 
 module.exports = {
     isUnknownInteractionError,
+    isAlreadyAcknowledgedInteractionError,
     safeDeferReply,
     safeEditReply
 };

@@ -255,7 +255,8 @@ function detectBrowserPaths() {
     return paths;
 }
 
-// mail.tm API
+// ==================== generator.email クライアント ====================
+
 // 12文字のランダム英数字パスワードを生成
 function generateRandomPassword() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -266,134 +267,142 @@ function generateRandomPassword() {
     return password;
 }
 
-// generator.email からメールアドレスを取得
-async function generateEmailFromGenerator() {
-    console.log('  📧 generator.email にアクセスしてメールアドレスを生成...');
-    
-    try {
-        // generator.email にアクセスしてメールアドレスを取得
-        const response = await fetch('https://generator.email/', {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-        });
-        
-        const html = await response.text();
-        
-        // メールアドレスを抽出（input 要素や表示されているテキストから）
-        // 形式: xxx@yyy.com
-        const emailMatch = html.match(/value="([a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"/);
-        const emailTextMatch = html.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-        
-        const email = emailMatch ? emailMatch[1] : (emailTextMatch ? emailTextMatch[1] : null);
-        
-        if (email) {
-            console.log(`  ✅ メールアドレス取得: ${email}`);
-            return email;
-        } else {
-            throw new Error('メールアドレスを抽出できませんでした');
-        }
-    } catch (error) {
-        console.log('  ⚠️ fetch での取得失敗、Puppeteer で再試行...');
-        return null;
-    }
-}
-
-// generator.email を使用した一時メールクライアント
+// generator.email を Puppeteer で操作する一時メールクライアント
 class GeneratorEmailClient {
     constructor() {
         this.email = null;
         this.password = generateRandomPassword();
+        this._browser = null; // 呼び出し元からbrowserをセットする
     }
 
-    async createAccount() {
-        // generator.email から実際にメールアドレスを取得
-        let email = await generateEmailFromGenerator();
-        
-        // fetch で取得できなかった場合はフォールバック
-        if (!email) {
-            // ランダムなドメインを持つメールアドレスを生成（実際には generator.email が生成するドメイン）
-            const domains = ['payspun.com', 'rroij.com', 'mailto.plus', 'fexpost.com', 'fexbox.org'];
-            const domain = domains[Math.floor(Math.random() * domains.length)];
-            const randomString = Math.random().toString(36).substring(2, 10);
-            email = `user${Date.now().toString(36).substring(2, 8)}${randomString}@${domain}`;
-        }
-        
-        this.email = email;
-        this.password = generateRandomPassword();
-        
-        console.log(`  ✅ メールアドレス: ${this.email}`);
-        console.log(`  🔑 パスワード: ${this.password}`);
-        return { email: this.email, password: this.password };
-    }
+    /**
+     * generator.email でアドレスを新規作成
+     * 1. https://generator.email/ にアクセス
+     * 2. "Generate new e-mail" をクリック
+     * 3. #email_ch_text の値を取得
+     */
+    async createAccount(browser) {
+        this._browser = browser;
+        console.log('  📧 generator.email でアドレスを生成中...');
 
-    async waitForVerificationCode(timeout = 300000, interval = 3000) {
-        const startTime = Date.now();
-        
-        // generator.email のメール確認URL（https://generator.email/生成したアドレス）
-        // @ をエンコードしてアクセス
-        const encodedEmail = encodeURIComponent(this.email);
-        const inboxUrl = `https://generator.email/${encodedEmail}`;
-        
-        console.log(`  📧 検証コードメールを待機中...`);
-        console.log(`  📧 Inbox URL: ${inboxUrl}`);
-        
-        while (Date.now() - startTime < timeout) {
-            await new Promise(resolve => setTimeout(resolve, interval));
-            
-            try {
-                // generator.email のメールページにアクセス
-                const response = await fetch(inboxUrl, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    }
-                });
-                
-                if (!response.ok) {
-                    console.log(`  ⚠️ HTTPエラー: ${response.status}`);
-                    continue;
-                }
-                
-                const html = await response.text();
-                
-                // デバッグ: HTMLの一部を表示
-                if (html.includes('ChatGPT') || html.includes('Your ChatGPT code')) {
-                    console.log('  📧 ChatGPT関連のメールを検出');
-                }
-                
-                // 「Your ChatGPT code is XXXXXX」形式から検証コードを抽出
-                const codeMatch = html.match(/Your ChatGPT code is (\d{6})/);
-                
-                if (codeMatch) {
-                    console.log(`  ✅ 検証コード取得: ${codeMatch[1]}`);
-                    console.log('     (OpenAIからのメール)');
-                    return codeMatch[1];
-                }
-                
-                // フォールバック: e7m subj_div_45g45gg クラス内の6桁数字を検索
-                const divMatch = html.match(/class="e7m subj_div_45g45gg"[^>]*>.*?\b(\d{6})\b/s);
-                if (divMatch) {
-                    console.log(`  ✅ 検証コード取得: ${divMatch[1]}`);
-                    return divMatch[1];
-                }
-                
-                // フォールバック: ChatGPT関連のメール内の6桁数字を検索
-                if (html.includes('ChatGPT') || html.includes('OpenAI')) {
-                    const fallbackMatch = html.match(/\b\d{6}\b/);
-                    if (fallbackMatch) {
-                        console.log(`  ✅ 検証コード取得: ${fallbackMatch[0]}`);
-                        return fallbackMatch[0];
-                    }
-                }
-                
-            } catch (error) {
-                // エラー時は静かに続行
+        const page = await browser.newPage();
+        try {
+            await page.goto('https://generator.email/', {
+                waitUntil: 'domcontentloaded',
+                timeout: 30000
+            });
+            await sleep(2000);
+
+            // "Generate new e-mail" ボタンをクリック
+            await page.evaluate(() => {
+                const btns = Array.from(document.querySelectorAll('button.btn-success'));
+                const btn = btns.find(b => b.textContent.includes('Generate new e-mail'));
+                if (btn) btn.click();
+            });
+            await sleep(2000);
+
+            // #copbtn (Copy) をクリック
+            await page.evaluate(() => {
+                const btn = document.querySelector('#copbtn');
+                if (btn) btn.click();
+            });
+            await sleep(500);
+
+            // #email_ch_text からアドレスを読み取る
+            const email = await page.evaluate(() => {
+                const el = document.querySelector('#email_ch_text');
+                return el ? (el.value || el.textContent || '').trim() : null;
+            });
+
+            if (!email || !email.includes('@')) {
+                throw new Error('generator.email: メールアドレス取得失敗');
             }
+
+            this.email = email;
+            console.log(`  ✅ メールアドレス: ${this.email}`);
+            console.log(`  🔑 パスワード: ${this.password}`);
+            return { email: this.email, password: this.password };
+        } finally {
+            await page.close();
         }
-        
-        throw new Error('検証コード取得タイムアウト');
+    }
+
+    /**
+     * generator.email の受信箱から検証コードを取得
+     * 1. https://generator.email/{email} にアクセス
+     * 2. "Refresh" ボタンを定期的にクリック
+     * 3. .subj_div_45g45gg から6桁コードを抽出
+     */
+    async waitForVerificationCode(timeout = 300000) {
+        if (!this._browser) throw new Error('browserがセットされていません');
+
+        console.log('📧 検証コードを取得中... (generator.email)');
+        const inboxUrl = `https://generator.email/${encodeURIComponent(this.email)}`;
+        console.log(`  📬 受信箱: ${inboxUrl}`);
+
+        const page = await this._browser.newPage();
+        try {
+            await page.goto(inboxUrl, {
+                waitUntil: 'domcontentloaded',
+                timeout: 30000
+            });
+            await sleep(2000);
+
+            const startTime = Date.now();
+            let attempt = 0;
+
+            while (Date.now() - startTime < timeout) {
+                attempt++;
+
+                // "Refresh" ボタンをクリック
+                await page.evaluate(() => {
+                    const btns = Array.from(document.querySelectorAll('button.btn-success'));
+                    const btn = btns.find(b => b.textContent.includes('Refresh'));
+                    if (btn) btn.click();
+                });
+                await sleep(3000);
+
+                // .subj_div_45g45gg から検証コードを抽出
+                const code = await page.evaluate(() => {
+                    const subjects = Array.from(document.querySelectorAll('.subj_div_45g45gg'));
+                    for (const el of subjects) {
+                        const text = el.textContent || '';
+                        const m = text.match(/Your ChatGPT code is (\d{6})/);
+                        if (m) return m[1];
+                        if (text.includes('ChatGPT') || text.includes('OpenAI')) {
+                            const m2 = text.match(/\b(\d{6})\b/);
+                            if (m2) return m2[1];
+                        }
+                    }
+                    // ページ全体も確認
+                    const body = document.body.innerText || '';
+                    const m3 = body.match(/Your ChatGPT code is (\d{6})/);
+                    if (m3) return m3[1];
+                    return null;
+                });
+
+                if (code) {
+                    console.log(`  ✅ 検証コード取得: ${code}`);
+                    return code;
+                }
+
+                if (attempt % 4 === 0) {
+                    const elapsed = Math.round((Date.now() - startTime) / 1000);
+                    console.log(`  ⏳ メール待機中... (${elapsed}秒経過)`);
+                }
+
+                await sleep(5000);
+            }
+
+            throw new Error('検証コード取得タイムアウト（5分）');
+        } finally {
+            await page.close();
+        }
     }
 }
+
+// MailTMClient は GeneratorEmailClient のエイリアスとして残す（後方互換）
+const MailTMClient = GeneratorEmailClient;
 
 // ランダムな名前生成
 function generateName() {
@@ -469,6 +478,9 @@ async function launchBrowser(browserType, browserPath) {
 // メイン処理
 async function signupWithBrowser(browserType, browserPath, mailClient, account) {
     const browser = await launchBrowser(browserType, browserPath);
+    
+    // generator.email クライアントにブラウザをセット
+    mailClient._browser = browser;
     
     // エラーモニターを初期化（後で開始）
     let errorMonitor = null;
@@ -993,10 +1005,21 @@ async function signupUnified() {
         console.log(`🔄 ${browser.type.toUpperCase()} で試行します`);
         console.log(`${'='.repeat(50)}\n`);
         
-        // ブラウザごとに新しいmail.tmアカウントを作成
+        // ブラウザごとに新しいgenerator.emailアカウントを作成
         console.log('📧 Step 1: generator.email アドレス生成');
         const mailClient = new GeneratorEmailClient();
-        const account = await mailClient.createAccount();
+        
+        // generator.email操作用に軽量なChromiumを一時起動
+        const tempBrowser = await require('puppeteer').launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        let account;
+        try {
+            account = await mailClient.createAccount(tempBrowser);
+        } finally {
+            await tempBrowser.close();
+        }
         console.log(`   Email: ${account.email}`);
         console.log(`   Pass: ${account.password}`);
         console.log('');
@@ -1029,4 +1052,9 @@ async function signupUnified() {
     throw lastError || new Error('アカウント作成に失敗しました');
 }
 
-signupUnified().catch(console.error);
+signupUnified().then(() => {
+    process.exit(0);
+}).catch(err => {
+    console.error(err.message);
+    process.exit(1);
+});

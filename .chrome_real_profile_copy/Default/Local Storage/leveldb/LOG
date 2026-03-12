@@ -1,0 +1,36 @@
+2026/03/12-02:47:05.332 22e14 Reusing MANIFEST I:\Programming\PF\2026\3\ChatGPT Business Account Generator\.chrome_real_profile_copy\Default\Local Storage\leveldb/MANIFEST-000001
+2026/03/12-02:47:05.350 22e14 Recovering log #69
+2026/03/12-02:47:05.363 22e14 Reusing old log I:\Programming\PF\2026\3\ChatGPT Business Account Generator\.chrome_real_profile_copy\Default\Local Storage\leveldb/000069.log 
+2026/03/12-02:47:38.515 253f8 Level-0 table #73: started
+2026/03/12-02:47:38.520 253f8 Level-0 table #73: 54404 bytes OK
+2026/03/12-02:47:38.523 253f8 Delete type=0 #69
+2026/03/12-02:47:38.523 22940 Compacting 4@0 + 1@1 files
+2026/03/12-02:47:38.529 22940 Generated table #74@0: 111 keys, 60149 bytes
+2026/03/12-02:47:38.530 22940 Compacted 4@0 + 1@1 files => 60149 bytes
+2026/03/12-02:47:38.532 22940 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/03/12-02:47:38.532 22940 Delete type=2 #62
+2026/03/12-02:47:38.532 22940 Delete type=2 #65
+2026/03/12-02:47:38.533 22940 Delete type=2 #68
+2026/03/12-02:47:38.533 22940 Delete type=2 #70
+2026/03/12-02:47:38.533 22940 Delete type=2 #73
+2026/03/12-07:59:02.577 22940 Level-0 table #76: started
+2026/03/12-07:59:02.584 22940 Level-0 table #76: 366367 bytes OK
+2026/03/12-07:59:02.587 22940 Delete type=0 #72
+2026/03/12-12:39:38.274 253f8 Level-0 table #78: started
+2026/03/12-12:39:38.280 253f8 Level-0 table #78: 366712 bytes OK
+2026/03/12-12:39:38.282 253f8 Delete type=0 #75
+2026/03/12-12:39:52.619 253f8 Level-0 table #80: started
+2026/03/12-12:39:52.625 253f8 Level-0 table #80: 357503 bytes OK
+2026/03/12-12:39:52.627 253f8 Delete type=0 #77
+2026/03/12-12:40:37.161 253f8 Level-0 table #82: started
+2026/03/12-12:40:37.167 253f8 Level-0 table #82: 365685 bytes OK
+2026/03/12-12:40:37.169 253f8 Delete type=0 #79
+2026/03/12-12:40:37.170 253f8 Compacting 4@0 + 1@1 files
+2026/03/12-12:40:37.179 253f8 Generated table #83@0: 117 keys, 425578 bytes
+2026/03/12-12:40:37.179 253f8 Compacted 4@0 + 1@1 files => 425578 bytes
+2026/03/12-12:40:37.181 253f8 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/03/12-12:40:37.181 253f8 Delete type=2 #74
+2026/03/12-12:40:37.181 253f8 Delete type=2 #76
+2026/03/12-12:40:37.181 253f8 Delete type=2 #78
+2026/03/12-12:40:37.181 253f8 Delete type=2 #80
+2026/03/12-12:40:37.181 253f8 Delete type=2 #82

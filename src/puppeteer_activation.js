@@ -11,6 +11,23 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const { classifyCheckoutProgress } = require('./utils/checkout-progress');
+const { createFrenchBillingProfile } = require('./utils/french-billing');
+const { withTimeout } = require('./utils/promise-timeout');
+const {
+    getStripeAddressFieldSelectors,
+    getStripeAddressFrameProbeSelectors,
+    sortStripeAddressFrameCandidates
+} = require('./utils/stripe-address');
+const {
+    getStripePayPalTabSelectors,
+    getStripePayPalKeywords,
+    getStripePayPalFrameProbeSelectors,
+    pickStripePaymentDirectCandidates,
+    pickStripePaymentProbeCandidates,
+    sortStripeFrameCandidates
+} = require('./utils/stripe-payment');
 
 try {
     var axios = require('axios');
@@ -20,6 +37,694 @@ try {
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function clickElementHandle(handle) {
+    try {
+        return await handle.evaluate((node) => {
+            const target = node.closest('button, [role="button"], [role="tab"], label') || node;
+            const style = window.getComputedStyle(target);
+            const rect = target.getBoundingClientRect();
+
+            if (target.disabled || target.getAttribute('aria-disabled') === 'true') {
+                return false;
+            }
+
+            if (style.display === 'none' || style.visibility === 'hidden' || rect.width === 0 || rect.height === 0) {
+                return false;
+            }
+
+            target.scrollIntoView({ block: 'center', inline: 'center' });
+            target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            if (typeof target.click === 'function') {
+                target.click();
+            }
+            return true;
+        });
+    } catch (error) {
+        return false;
+    }
+}
+
+async function tryClickExactPayPalHandle(target) {
+    const exactHandle = await target
+        .waitForSelector('button[data-testid="paypal"], #paypal-tab, button[value="paypal"], [aria-controls="paypal-panel"]', {
+            visible: true,
+            timeout: 600
+        })
+        .catch(() => null);
+
+    if (!exactHandle) {
+        return { clicked: false, method: 'exact-handle-miss' };
+    }
+
+    try {
+        await exactHandle.evaluate((node) => {
+            node.scrollIntoView({ block: 'center', inline: 'center' });
+        });
+        await exactHandle.click({ delay: 50 });
+        return { clicked: true, method: 'exact-handle-click' };
+    } catch (error) {
+        const fallbackClicked = await clickElementHandle(exactHandle);
+        if (fallbackClicked) {
+            return { clicked: true, method: 'exact-handle-fallback' };
+        }
+    }
+
+    return { clicked: false, method: 'exact-handle-failed' };
+}
+
+async function tryClickPayPalTab(target, selectors, options = {}) {
+    const { allowDeepSearch = true } = options;
+    const keywords = getStripePayPalKeywords();
+
+    for (const selector of selectors) {
+        try {
+            const handle = await target.$(selector);
+            if (!handle) {
+                continue;
+            }
+
+            const clicked = await clickElementHandle(handle);
+            if (clicked) {
+                return { clicked: true, selector, method: 'handle-selector' };
+            }
+        } catch (error) {}
+    }
+
+    try {
+        const clickables = await target.$$('button, [role="button"], [role="tab"], label');
+        for (const handle of clickables) {
+            const matched = await handle.evaluate((node) => {
+                const normalizedText = (node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                const ariaLabel = (node.getAttribute('aria-label') || '').trim().toLowerCase();
+                const dataTestId = (node.getAttribute('data-testid') || '').trim().toLowerCase();
+                const value = (node.getAttribute('value') || '').trim().toLowerCase();
+                const hasPayPalGraphic = Boolean(node.querySelector('img[alt*="PayPal" i], img[src*="paypal"], svg[aria-label*="PayPal" i]'));
+
+                return normalizedText.includes('paypal') ||
+                    ariaLabel.includes('paypal') ||
+                    dataTestId.includes('paypal') ||
+                    value === 'paypal' ||
+                    hasPayPalGraphic;
+            }).catch(() => false);
+
+            if (!matched) {
+                continue;
+            }
+
+            const clicked = await clickElementHandle(handle);
+            if (clicked) {
+                return { clicked: true, selector: 'heuristic-paypal-match', method: 'handle-heuristic' };
+            }
+        }
+    } catch (error) {}
+
+    if (!allowDeepSearch) {
+        return { clicked: false, selector: null, method: 'quick-not-found' };
+    }
+
+    try {
+        const deepResult = await withTimeout(() => target.evaluate((selectorList, keywordList) => {
+            function isVisible(node) {
+                if (!node) {
+                    return false;
+                }
+
+                const style = window.getComputedStyle(node);
+                const rect = node.getBoundingClientRect();
+                return !(node.disabled ||
+                    node.getAttribute('aria-disabled') === 'true' ||
+                    style.display === 'none' ||
+                    style.visibility === 'hidden' ||
+                    rect.width === 0 ||
+                    rect.height === 0);
+            }
+
+            function clickNode(node) {
+                const targetNode = node.closest('button, [role="button"], [role="tab"], label, a, div') || node;
+                if (!isVisible(targetNode)) {
+                    return false;
+                }
+
+                targetNode.scrollIntoView({ block: 'center', inline: 'center' });
+                targetNode.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
+                targetNode.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                targetNode.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                targetNode.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                if (typeof targetNode.click === 'function') {
+                    targetNode.click();
+                }
+                return true;
+            }
+
+            function queryDeep(selector, root) {
+                const base = root || document;
+                const direct = base.querySelector(selector);
+                if (direct) {
+                    return direct;
+                }
+
+                const nodes = base.querySelectorAll('*');
+                for (const node of nodes) {
+                    if (!node.shadowRoot) {
+                        continue;
+                    }
+                    const found = queryDeep(selector, node.shadowRoot);
+                    if (found) {
+                        return found;
+                    }
+                }
+
+                return null;
+            }
+
+            function findByHeuristic(root) {
+                const base = root || document;
+                const candidates = base.querySelectorAll('button, [role="button"], [role="tab"], label, a, div, span, img');
+                for (const node of candidates) {
+                    const normalizedText = (node.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                    const ariaLabel = (node.getAttribute('aria-label') || '').trim().toLowerCase();
+                    const dataTestId = (node.getAttribute('data-testid') || '').trim().toLowerCase();
+                    const value = (node.getAttribute('value') || '').trim().toLowerCase();
+                    const alt = (node.getAttribute('alt') || '').trim().toLowerCase();
+                    const src = (node.getAttribute('src') || '').trim().toLowerCase();
+                    const className = typeof node.className === 'string' ? node.className.toLowerCase() : '';
+                    const id = (node.id || '').trim().toLowerCase();
+                    const haystack = [normalizedText, ariaLabel, dataTestId, value, alt, src, className, id].join(' ');
+                    const matched = keywordList.some((keyword) => haystack.includes(keyword));
+
+                    if (!matched) {
+                        continue;
+                    }
+
+                    const clickable = node.closest('button, [role="button"], [role="tab"], label, a, div') || node;
+                    if (isVisible(clickable)) {
+                        return clickable;
+                    }
+                }
+
+                const nodes = base.querySelectorAll('*');
+                for (const node of nodes) {
+                    if (!node.shadowRoot) {
+                        continue;
+                    }
+                    const found = findByHeuristic(node.shadowRoot);
+                    if (found) {
+                        return found;
+                    }
+                }
+
+                return null;
+            }
+
+            for (const selector of selectorList) {
+                const found = queryDeep(selector, document);
+                if (found && clickNode(found)) {
+                    return { clicked: true, selector, method: 'deep-selector' };
+                }
+            }
+
+            const heuristicNode = findByHeuristic(document);
+            if (heuristicNode && clickNode(heuristicNode)) {
+                return { clicked: true, selector: 'heuristic-paypal-match', method: 'deep-heuristic' };
+            }
+
+            return { clicked: false, selector: null, method: 'deep-search' };
+        }, selectors, keywords), 1200, {
+            clicked: false,
+            selector: null,
+            method: 'deep-search-timeout'
+        });
+
+        if (deepResult && deepResult.clicked) {
+            return deepResult;
+        }
+    } catch (error) {}
+
+    return { clicked: false, selector: null, method: 'not-found' };
+}
+
+async function inspectStripePayPalFrame(frame, probeSelectors) {
+    try {
+        return await withTimeout(() => frame.evaluate((selectors) => {
+            function queryDeep(selector, root) {
+                const base = root || document;
+                const direct = base.querySelector(selector);
+                if (direct) {
+                    return direct;
+                }
+
+                const nodes = base.querySelectorAll('*');
+                for (const node of nodes) {
+                    if (!node.shadowRoot) {
+                        continue;
+                    }
+                    const nested = queryDeep(selector, node.shadowRoot);
+                    if (nested) {
+                        return nested;
+                    }
+                }
+
+                return null;
+            }
+
+            const matchedSelectors = [];
+            for (const selector of selectors) {
+                if (queryDeep(selector, document)) {
+                    matchedSelectors.push(selector);
+                }
+            }
+
+            return {
+                matchedSelectors,
+                matchedProbeCount: matchedSelectors.length,
+                inputCount: document.querySelectorAll('input, select, textarea, button, [role="tab"]').length
+            };
+        }, probeSelectors), 1200, {
+            matchedSelectors: [],
+            matchedProbeCount: 0,
+            inputCount: 0,
+            timedOut: true
+        });
+    } catch (error) {
+        return {
+            matchedSelectors: [],
+            matchedProbeCount: 0,
+            inputCount: 0,
+            timedOut: false
+        };
+    }
+}
+
+async function findBestStripePaymentFrame(page, probeSelectors, baseCandidates = null) {
+    const rankedBaseCandidates = Array.isArray(baseCandidates) ? baseCandidates : getStripeFrameCandidates(page);
+    const probeCandidates = pickStripePaymentProbeCandidates(rankedBaseCandidates, 2);
+    const inspectedByFrame = new Map();
+
+    for (const candidate of probeCandidates) {
+        const inspection = await inspectStripePayPalFrame(candidate.frame, probeSelectors);
+        inspectedByFrame.set(candidate.frame, {
+            matchedProbeCount: inspection.matchedProbeCount,
+            matchedSelectors: inspection.matchedSelectors,
+            inputCount: inspection.inputCount,
+            timedOut: inspection.timedOut
+        });
+    }
+
+    const mergedCandidates = rankedBaseCandidates.map((candidate) => ({
+        ...candidate,
+        ...(inspectedByFrame.get(candidate.frame) || {})
+    }));
+    const ranked = sortStripeFrameCandidates(mergedCandidates);
+    const inspectedCandidates = probeCandidates.map((candidate) => ({
+        ...candidate,
+        ...(inspectedByFrame.get(candidate.frame) || {})
+    }));
+
+    return {
+        candidates: ranked,
+        inspectedCandidates,
+        bestCandidate: ranked.find((candidate) => (candidate.matchedProbeCount || 0) > 0) ||
+            inspectedCandidates[0] ||
+            ranked[0] ||
+            null
+    };
+}
+
+function getStripeFrameCandidates(page) {
+    const rawCandidates = page.frames().map((frame) => {
+        let url = '';
+        let name = '';
+
+        try {
+            url = frame.url();
+        } catch (error) {}
+
+        try {
+            name = frame.name();
+        } catch (error) {}
+
+        return { frame, url, name };
+    });
+
+    return sortStripeFrameCandidates(rawCandidates);
+}
+
+async function inspectStripeAddressFrame(frame, probeSelectors) {
+    try {
+        return await withTimeout(() => frame.evaluate((selectors) => {
+            function queryDeep(selector, root) {
+                const base = root || document;
+                const direct = base.querySelector(selector);
+                if (direct) {
+                    return direct;
+                }
+
+                const nodes = base.querySelectorAll('*');
+                for (const node of nodes) {
+                    if (!node.shadowRoot) {
+                        continue;
+                    }
+
+                    const nested = queryDeep(selector, node.shadowRoot);
+                    if (nested) {
+                        return nested;
+                    }
+                }
+
+                return null;
+            }
+
+            const matchedSelectors = [];
+            for (const selector of selectors) {
+                if (queryDeep(selector, document)) {
+                    matchedSelectors.push(selector);
+                }
+            }
+
+            return {
+                matchedSelectors,
+                matchedProbeCount: matchedSelectors.length,
+                inputCount: document.querySelectorAll('input, select, textarea').length
+            };
+        }, probeSelectors), 1200, {
+            matchedSelectors: [],
+            matchedProbeCount: 0,
+            inputCount: 0,
+            timedOut: true
+        });
+    } catch (error) {
+        return {
+            matchedSelectors: [],
+            matchedProbeCount: 0,
+            inputCount: 0,
+            timedOut: false
+        };
+    }
+}
+
+async function findBestStripeAddressFrame(page, probeSelectors) {
+    const rawCandidates = [];
+
+    for (const frame of page.frames()) {
+        let url = '';
+        let name = '';
+
+        try {
+            url = frame.url();
+        } catch (error) {}
+
+        try {
+            name = frame.name();
+        } catch (error) {}
+
+        const isStripeLike = `${url} ${name}`.toLowerCase().includes('stripe');
+        if (!isStripeLike) {
+            continue;
+        }
+
+        const inspection = await inspectStripeAddressFrame(frame, probeSelectors);
+        rawCandidates.push({
+            frame,
+            url,
+            name,
+            matchedProbeCount: inspection.matchedProbeCount,
+            matchedSelectors: inspection.matchedSelectors,
+            inputCount: inspection.inputCount
+        });
+    }
+
+    const ranked = sortStripeAddressFrameCandidates(rawCandidates);
+    return {
+        candidates: ranked,
+        bestCandidate: ranked.find((candidate) => (candidate.matchedProbeCount || 0) > 0) || ranked[0] || null
+    };
+}
+
+async function fillStripeFieldHandle(handle, value, fieldName, options = {}) {
+    const result = await handle.evaluate((element, payload) => {
+        function dispatchTextEvents(target) {
+            target.dispatchEvent(new InputEvent('input', {
+                bubbles: true,
+                cancelable: true,
+                inputType: 'insertText',
+                data: String(payload.value)
+            }));
+            target.dispatchEvent(new Event('change', { bubbles: true }));
+            target.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Tab' }));
+        }
+
+        function setNativeValue(target, nextValue) {
+            const prototype = target.tagName === 'SELECT'
+                ? window.HTMLSelectElement.prototype
+                : target.tagName === 'TEXTAREA'
+                    ? window.HTMLTextAreaElement.prototype
+                    : window.HTMLInputElement.prototype;
+            const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+            if (descriptor && descriptor.set) {
+                descriptor.set.call(target, nextValue);
+            } else {
+                target.value = nextValue;
+            }
+        }
+
+        const tagName = element.tagName;
+        const intendedValue = payload.countryMode ? (payload.countryCode || 'FR') : String(payload.value);
+        const textValue = payload.countryMode ? (payload.countryName || 'France') : String(payload.value);
+
+        try { element.focus(); } catch (error) {}
+
+        if (tagName === 'SELECT') {
+            setNativeValue(element, intendedValue);
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+            try { element.blur(); } catch (error) {}
+            return {
+                ok: element.value === intendedValue,
+                tagName,
+                currentValue: element.value
+            };
+        }
+
+        setNativeValue(element, textValue);
+        dispatchTextEvents(element);
+        try { element.blur(); } catch (error) {}
+
+        return {
+            ok: String(element.value || '') === textValue,
+            tagName,
+            currentValue: String(element.value || '')
+        };
+    }, {
+        value,
+        countryMode: Boolean(options.countryMode),
+        countryCode: options.countryCode || 'FR',
+        countryName: options.countryName || 'France'
+    }).catch(() => ({ ok: false, tagName: 'UNKNOWN', currentValue: '' }));
+
+    if (result.ok) {
+        console.log(`      ✅ ${fieldName}: ${result.currentValue}`);
+        return true;
+    }
+
+    try {
+        await handle.click({ clickCount: 3 });
+        if (options.countryMode) {
+            const tagName = await handle.evaluate((element) => element.tagName);
+            if (tagName === 'SELECT') {
+                await handle.select(options.countryCode || 'FR');
+                const selectedValue = await handle.evaluate((element) => element.value);
+                if (selectedValue === (options.countryCode || 'FR')) {
+                    console.log(`      ✅ ${fieldName}: ${selectedValue}`);
+                    return true;
+                }
+            } else {
+                await handle.type(options.countryName || 'France', { delay: 30 });
+            }
+        } else {
+            await handle.type(String(value), { delay: 30 });
+        }
+
+        const afterType = await handle.evaluate((element) => String(element.value || ''));
+        const expected = options.countryMode ? (options.countryCode || 'FR') : String(value);
+        const textExpected = options.countryMode ? (options.countryName || 'France') : String(value);
+        if (afterType === expected || afterType === textExpected) {
+            console.log(`      ✅ ${fieldName}: ${afterType}`);
+            return true;
+        }
+    } catch (error) {}
+
+    console.log(`      ⚠️ ${fieldName}: 値設定に失敗`);
+    return false;
+}
+
+async function fillStripeFieldBySelectors(frame, selectors, value, fieldName, options = {}) {
+    for (const selector of selectors) {
+        try {
+            const handle = await frame.waitForSelector(selector, { timeout: 1500, visible: true });
+            if (!handle) {
+                continue;
+            }
+
+            const filled = await fillStripeFieldHandle(handle, value, fieldName, options);
+            if (filled) {
+                return true;
+            }
+        } catch (error) {}
+    }
+
+    return false;
+}
+
+async function collectCheckoutSignals(target, subscribePatterns, confirmPatterns) {
+    return await target.evaluate((subscribeKeywords, confirmKeywords) => {
+        function normalizeText(node) {
+            return [
+                node?.textContent || '',
+                node?.value || '',
+                node?.getAttribute?.('aria-label') || '',
+                node?.getAttribute?.('data-testid') || '',
+                node?.id || ''
+            ].join(' ').replace(/\s+/g, ' ').trim().toLowerCase();
+        }
+
+        function collectButtons() {
+            return Array.from(document.querySelectorAll('button, input[type="submit"], [role="button"], [role="tab"]'));
+        }
+
+        function matches(node, patterns) {
+            const text = normalizeText(node);
+            return patterns.some((pattern) => text.includes(pattern));
+        }
+
+        const buttons = collectButtons();
+        const bodyText = (document.body?.innerText || '').toLowerCase();
+        const subscribeButtons = buttons.filter((node) => matches(node, subscribeKeywords));
+        const confirmButtons = buttons.filter((node) => matches(node, confirmKeywords) || node.id === 'consentButton');
+
+        return {
+            hasUnknownError: bodyText.includes('不明なエラーが発生しました') || bodyText.includes('an unknown error occurred'),
+            hasSuccess: Boolean(
+                document.querySelector('[data-testid="success"], .success-message, #payment-success') ||
+                bodyText.includes('payment successful') ||
+                window.location.href.includes('/success')
+            ),
+            hasSubscribeAction: subscribeButtons.length > 0,
+            hasDisabledSubscribeAction: subscribeButtons.some((node) => node.disabled || node.getAttribute('aria-disabled') === 'true'),
+            hasConfirmAction: confirmButtons.length > 0,
+            hasAddressForm: Boolean(document.querySelector('#billingAddress-nameInput, #billingAddress-addressLine1Input, #billingAddress-postalCodeInput')),
+            hasPayPalFrame: bodyText.includes('paypal') || Boolean(document.querySelector('#paypal-tab, [data-testid="paypal"], [aria-controls="paypal-panel"]')),
+            currentUrl: window.location.href
+        };
+    }, subscribePatterns, confirmPatterns).catch(() => ({
+        hasUnknownError: false,
+        hasSuccess: false,
+        hasSubscribeAction: false,
+        hasDisabledSubscribeAction: false,
+        hasConfirmAction: false,
+        hasAddressForm: false,
+        hasPayPalFrame: false,
+        currentUrl: ''
+    }));
+}
+
+async function collectCheckoutSnapshot(page, browser, subscribePatterns, confirmPatterns) {
+    const pageSignals = await collectCheckoutSignals(page, subscribePatterns, confirmPatterns);
+    const frameUrls = [];
+    let hasUnknownError = pageSignals.hasUnknownError;
+    let hasSuccess = pageSignals.hasSuccess;
+    let hasSubscribeAction = pageSignals.hasSubscribeAction;
+    let hasDisabledSubscribeAction = pageSignals.hasDisabledSubscribeAction;
+    let hasConfirmAction = pageSignals.hasConfirmAction;
+    let hasAddressForm = pageSignals.hasAddressForm;
+    let hasPayPalFrame = pageSignals.hasPayPalFrame;
+
+    for (const frame of page.frames()) {
+        let frameUrl = '';
+        try {
+            frameUrl = frame.url();
+        } catch (error) {}
+
+        if (frameUrl) {
+            frameUrls.push(frameUrl);
+        }
+
+        const frameSignals = await collectCheckoutSignals(frame, subscribePatterns, confirmPatterns);
+        hasUnknownError = hasUnknownError || frameSignals.hasUnknownError;
+        hasSuccess = hasSuccess || frameSignals.hasSuccess;
+        hasSubscribeAction = hasSubscribeAction || frameSignals.hasSubscribeAction;
+        hasDisabledSubscribeAction = hasDisabledSubscribeAction || frameSignals.hasDisabledSubscribeAction;
+        hasConfirmAction = hasConfirmAction || frameSignals.hasConfirmAction;
+        hasAddressForm = hasAddressForm || frameSignals.hasAddressForm;
+        hasPayPalFrame = hasPayPalFrame || frameSignals.hasPayPalFrame;
+    }
+
+    const popupUrls = [];
+    try {
+        const pages = await browser.pages();
+        for (const browserPage of pages) {
+            try {
+                const popupUrl = browserPage.url();
+                if (popupUrl) {
+                    popupUrls.push(popupUrl);
+                }
+            } catch (error) {}
+        }
+    } catch (error) {}
+
+    const allUrls = [pageSignals.currentUrl, ...frameUrls, ...popupUrls].filter(Boolean);
+    const hasPayPalPage = allUrls.some((url) => url.includes('paypal.com') || url.includes('captcha'));
+    const hasPayPalPopup = popupUrls.some((url) => url.includes('paypal.com') || url.includes('captcha'));
+
+    return {
+        hasUnknownError,
+        hasSuccess,
+        hasSubscribeAction,
+        hasDisabledSubscribeAction,
+        hasConfirmAction,
+        hasAddressForm,
+        hasPayPalFrame,
+        hasPayPalPage,
+        hasPayPalPopup,
+        currentUrl: pageSignals.currentUrl,
+        hadSubscribeContext: true
+    };
+}
+
+// Enterキー入力を待機（手動モード用）
+function waitForEnter(timeoutMs = 60000) {
+    return new Promise((resolve) => {
+        const stdin = process.stdin;
+        
+        // タイムアウト設定
+        const timeout = setTimeout(() => {
+            stdin.removeListener('data', onData);
+            stdin.setRawMode(false);
+            stdin.pause();
+            console.log('\n⏱️  タイムアウトしました。自動的に処理を継続します...');
+            resolve();
+        }, timeoutMs);
+        
+        function onData(key) {
+            // Enterキー (13) または Ctrl+C (3)
+            if (key[0] === 13 || key[0] === 3) {
+                clearTimeout(timeout);
+                stdin.removeListener('data', onData);
+                stdin.setRawMode(false);
+                stdin.pause();
+                if (key[0] === 3) {
+                    process.exit(0);
+                }
+                resolve();
+            }
+        }
+        
+        stdin.setRawMode(true);
+        stdin.resume();
+        stdin.setEncoding('utf8');
+        stdin.on('data', onData);
+    });
 }
 
 // HTTPリクエストヘルパー
@@ -44,45 +749,18 @@ async function httpRequest(url, options = {}) {
 async function generateFrenchAddress() {
     console.log('🇫🇷 フランス住所を生成中...');
     try {
-        const streets = [
-            'Rue de la Paix', 'Rue de Rivoli', 'Avenue des Champs-Élysées',
-            'Rue du Faubourg Saint-Honoré', 'Boulevard Haussmann', 'Rue de la Convention',
-            'Avenue Victor Hugo', 'Rue de Vaugirard', 'Boulevard Saint-Germain',
-            'Rue de la Roquette', 'Avenue Jean Jaurès', 'Rue du Bac'
-        ];
-        const cities = [
-            { name: 'Paris', code: '75000' },
-            { name: 'Lyon', code: '69000' },
-            { name: 'Marseille', code: '13000' },
-            { name: 'Bordeaux', code: '33000' },
-            { name: 'Toulouse', code: '31000' },
-            { name: 'Nantes', code: '44000' },
-            { name: 'Strasbourg', code: '67000' },
-            { name: 'Lille', code: '59000' }
-        ];
-        
-        const street = streets[Math.floor(Math.random() * streets.length)];
-        const number = Math.floor(Math.random() * 200) + 1;
-        const city = cities[Math.floor(Math.random() * cities.length)];
-        const postalCode = String(parseInt(city.code) + Math.floor(Math.random() * 20)).padStart(5, '0');
-        
-        const address = {
-            name: 'chihalu',
-            street: `${number} ${street}`,
-            postalCode: postalCode,
-            city: city.name
-        };
-        
-        console.log(`  ✅ 住所生成: ${address.street}, ${address.postalCode} ${address.city}`);
+        const address = createFrenchBillingProfile();
+        console.log(`  ✅ 住所生成: ${address.name} / ${address.street}, ${address.postalCode} ${address.city}`);
         return address;
-        
     } catch (error) {
         console.error('  ❌ 住所生成エラー:', error.message);
         return {
-            name: 'chihalu',
+            name: 'Camille Martin',
             street: '123 Rue de la Paix',
             postalCode: '75002',
-            city: 'Paris'
+            city: 'Paris',
+            countryCode: 'FR',
+            countryName: 'France'
         };
     }
 }
@@ -97,56 +775,123 @@ function generateRandomPassword() {
     return password;
 }
 
-// generator.email で検証コード取得（見つかるまで無限ループ）
-async function getVerificationCode(email, password) {
-    console.log('📧 検証コードを取得中...');
-    
-    const username = email.split('@')[0];
-    const inboxUrl = `https://generator.email/${email}`;
-    
-    console.log(`  📧 Inbox URL: ${inboxUrl}`);
-    
-    // メールを見つかるまで無限ループ
-    while (true) {
-        try {
-            await sleep(3000);
-            
-            // generator.email のメールページにアクセス
-            const html = await httpRequest(inboxUrl, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
-            });
-            
-            // 「Your ChatGPT code is XXXXXX」形式から検証コードを抽出
-            const codeMatch = html.match(/Your ChatGPT code is (\d{6})/);
-            if (codeMatch) {
-                console.log(`  ✅ 検証コード: ${codeMatch[1]}`);
-                return codeMatch[1];
-            }
-            
-            // フォールバック: ChatGPT関連のメール内の6桁数字を検索
-            if (html.includes('ChatGPT') || html.includes('OpenAI')) {
-                const fallbackMatch = html.match(/\b\d{6}\b/);
-                if (fallbackMatch) {
-                    console.log(`  ✅ 検証コード: ${fallbackMatch[0]}`);
-                    return fallbackMatch[0];
-                }
-            }
-        } catch (error) {
-            // エラーが出ても続行
+// ==================== generator.email クライアント ====================
+
+async function createGeneratorEmail(browser) {
+    console.log('📧 generator.email でアドレスを生成中...');
+    const page = await browser.newPage();
+    try {
+        await page.goto('https://generator.email/', {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000
+        });
+        await sleep(2000);
+
+        await page.evaluate(() => {
+            const btns = Array.from(document.querySelectorAll('button.btn-success'));
+            const btn = btns.find(b => b.textContent.includes('Generate new e-mail'));
+            if (btn) btn.click();
+        });
+        await sleep(2000);
+
+        await page.evaluate(() => {
+            const btn = document.querySelector('#copbtn');
+            if (btn) btn.click();
+        });
+        await sleep(500);
+
+        const email = await page.evaluate(() => {
+            const el = document.querySelector('#email_ch_text');
+            return el ? el.value || el.textContent.trim() : null;
+        });
+
+        if (!email || !email.includes('@')) {
+            throw new Error('メールアドレスの取得に失敗しました');
         }
+
+        console.log(`  ✅ 生成アドレス: ${email}`);
+        return email;
+    } finally {
+        await page.close();
     }
 }
 
-// ブラウザパス検出
+async function getVerificationCode(browser, email, _unused, timeout = 300000) {
+    console.log('📧 検証コードを取得中... (generator.email)');
+
+    const inboxUrl = `https://generator.email/${encodeURIComponent(email)}`;
+    console.log(`  📬 受信箱: ${inboxUrl}`);
+
+    const page = await browser.newPage();
+    try {
+        await page.goto(inboxUrl, {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000
+        });
+        await sleep(2000);
+
+        const startTime = Date.now();
+        let attempt = 0;
+
+        while (Date.now() - startTime < timeout) {
+            attempt++;
+
+            await page.evaluate(() => {
+                const btns = Array.from(document.querySelectorAll('button.btn-success'));
+                const btn = btns.find(b => b.textContent.includes('Refresh'));
+                if (btn) btn.click();
+            });
+            await sleep(3000);
+
+            const code = await page.evaluate(() => {
+                const subjects = Array.from(document.querySelectorAll('.subj_div_45g45gg'));
+                for (const el of subjects) {
+                    const text = el.textContent || '';
+                    const m = text.match(/Your ChatGPT code is (\d{6})/);
+                    if (m) return m[1];
+                    if (text.includes('ChatGPT') || text.includes('OpenAI')) {
+                        const m2 = text.match(/\b(\d{6})\b/);
+                        if (m2) return m2[1];
+                    }
+                }
+                const body = document.body.innerText || '';
+                const m3 = body.match(/Your ChatGPT code is (\d{6})/);
+                if (m3) return m3[1];
+                return null;
+            });
+
+            if (code) {
+                console.log(`  ✅ 検証コード取得: ${code}`);
+                return code;
+            }
+
+            if (attempt % 4 === 0) {
+                const elapsed = Math.round((Date.now() - startTime) / 1000);
+                console.log(`  ⏳ メール待機中... (${elapsed}秒経過)`);
+            }
+
+            await sleep(5000);
+        }
+
+        throw new Error('検証コード取得タイムアウト（5分）');
+    } finally {
+        await page.close();
+    }
+}
+
+// ブラウザパス検出（Chrome通常版を優先、Dev版は除外）
 function detectBrowserPaths() {
     const isMac = process.platform === 'darwin';
+    const isWindows = process.platform === 'win32';
     const paths = { brave: null, chrome: null };
     
     const bravePaths = [
         process.env.BRAVE_PATH,
-        ...(isMac ? ['/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'] : [])
+        ...(isMac ? ['/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'] : []),
+        ...(isWindows ? [
+            'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+            'C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe'
+        ] : [])
     ];
     
     for (const p of bravePaths) {
@@ -156,26 +901,164 @@ function detectBrowserPaths() {
         }
     }
     
+    // Chrome通常版のみ（Dev版は除外）
     const chromePaths = [
         process.env.CHROME_PATH,
-        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+        ...(isMac ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'] : []),
+        ...(isWindows ? [
+            // 通常版Chrome（優先）
+            path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+            'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+            'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
+        ] : [])
     ];
     
     for (const p of chromePaths) {
         if (p && fs.existsSync(p)) {
-            paths.chrome = p;
-            break;
+            // Chrome Devを除外（パスに"Dev"が含まれる場合はスキップ）
+            if (!p.toLowerCase().includes('dev')) {
+                paths.chrome = p;
+                break;
+            }
         }
     }
     
     return paths;
 }
 
+// 実際のChromeプロファイルパスを取得
+function getChromeProfilePath() {
+    const isWindows = process.platform === 'win32';
+    const isMac = process.platform === 'darwin';
+    
+    if (isWindows) {
+        return path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'User Data');
+    } else if (isMac) {
+        return path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome');
+    } else {
+        // Linux
+        return path.join(os.homedir(), '.config', 'google-chrome');
+    }
+}
+
+// 実プロファイルをコピーして使用（安全な方法）
+function setupRealProfileCopy() {
+    const realProfilePath = getChromeProfilePath();
+    const copyProfilePath = path.join(__dirname, '..', '.chrome_real_profile_copy');
+    
+    // 重要なファイルのみコピー（Cookie、ログイン情報など）
+    const filesToCopy = [
+        'Cookies',
+        'Cookies-journal',
+        'Login Data',
+        'Login Data-journal',
+        'Preferences',
+        'Secure Preferences',
+        'Bookmarks',
+        'History',
+        'Favicons'
+    ];
+    
+    const defaultDir = path.join(realProfilePath, 'Default');
+    const copyDefaultDir = path.join(copyProfilePath, 'Default');
+    
+    if (!fs.existsSync(defaultDir)) {
+        console.log('  ⚠️ 実プロファイルが見つかりません:', defaultDir);
+        return null;
+    }
+    
+    // コピー先ディレクトリ作成
+    if (!fs.existsSync(copyDefaultDir)) {
+        fs.mkdirSync(copyDefaultDir, { recursive: true });
+    }
+    
+    let copiedCount = 0;
+    for (const file of filesToCopy) {
+        const src = path.join(defaultDir, file);
+        const dest = path.join(copyDefaultDir, file);
+        
+        if (fs.existsSync(src)) {
+            try {
+                fs.copyFileSync(src, dest);
+                copiedCount++;
+            } catch (e) {
+                // ロックされているファイルはスキップ
+            }
+        }
+    }
+    
+    // Local Stateもコピー
+    const localStateSrc = path.join(realProfilePath, 'Local State');
+    const localStateDest = path.join(copyProfilePath, 'Local State');
+    if (fs.existsSync(localStateSrc)) {
+        try {
+            fs.copyFileSync(localStateSrc, localStateDest);
+        } catch (e) {}
+    }
+    
+    console.log(`  📁 実プロファイルから ${copiedCount} ファイルをコピーしました`);
+    return copyProfilePath;
+}
+
 // ブラウザを起動（フォールバック機構付き）
 async function launchBrowserWithFallback() {
     const browserPaths = detectBrowserPaths();
     
-    // オプション1: Puppeteer内蔵Chromium（最も信頼性が高い）
+    // オプション1: 通常版Chrome + 実プロファイルコピー（最優先）
+    if (browserPaths.chrome) {
+        console.log(`🔄 Chrome通常版 (${browserPaths.chrome}) を使用`);
+        console.log('📁 実プロファイルをコピーして使用します...');
+        
+        const profilePath = setupRealProfileCopy();
+        
+        if (profilePath) {
+            try {
+                const browser = await puppeteer.launch({
+                    headless: false,
+                    executablePath: browserPaths.chrome,
+                    userDataDir: profilePath,
+                    args: [
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--window-size=1920,1080',
+                        '--disable-blink-features=AutomationControlled',
+                        '--profile-directory=Default'
+                    ],
+                    ignoreDefaultArgs: ['--enable-automation']
+                });
+                console.log('✅ Chrome（実プロファイルコピー付き）で起動しました');
+                console.log('   注意: Cookieやログイン情報が引き継がれています');
+                return browser;
+            } catch (e) {
+                console.log('⚠️ 実プロファイル付きChromeの起動に失敗:', e.message);
+                console.log('   Chromeが起動中の場合は閉じてください');
+            }
+        }
+        
+        // プロファイルコピー失敗時は一時プロファイルでフォールバック
+        console.log('🔄 一時プロファイルでフォールバック...');
+        try {
+            const tmpDir = path.join(__dirname, '..', `.activation_tmp_${Date.now()}`);
+            const browser = await puppeteer.launch({
+                headless: false,
+                executablePath: browserPaths.chrome,
+                userDataDir: tmpDir,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--window-size=1920,1080',
+                    '--disable-blink-features=AutomationControlled'
+                ],
+                ignoreDefaultArgs: ['--enable-automation']
+            });
+            console.log('✅ Chrome（一時プロファイル）で起動しました');
+            return browser;
+        } catch (e) {
+            console.log('⚠️ Chromeの起動に失敗:', e.message);
+        }
+    }
+    
+    // オプション2: Puppeteer内蔵Chromium
     console.log('🔄 Puppeteer内蔵Chromiumで起動を試みます...');
     try {
         const browser = await puppeteer.launch({
@@ -194,11 +1077,10 @@ async function launchBrowserWithFallback() {
         console.log('⚠️ 内蔵Chromiumの起動に失敗:', e.message);
     }
     
-    // オプション2: システムブラウザ（Brave）
+    // オプション3: Brave
     if (browserPaths.brave) {
         console.log(`🔄 Brave (${browserPaths.brave}) で起動を試みます...`);
         try {
-            // 一時的なユーザーデータディレクトリを使用（ロック回避）
             const tmpDir = path.join(__dirname, '..', `.activation_tmp_${Date.now()}`);
             const browser = await puppeteer.launch({
                 headless: false,
@@ -216,30 +1098,6 @@ async function launchBrowserWithFallback() {
             return browser;
         } catch (e) {
             console.log('⚠️ Braveの起動に失敗:', e.message);
-        }
-    }
-    
-    // オプション3: システムブラウザ（Chrome）
-    if (browserPaths.chrome) {
-        console.log(`🔄 Chrome (${browserPaths.chrome}) で起動を試みます...`);
-        try {
-            const tmpDir = path.join(__dirname, '..', `.activation_tmp_${Date.now()}`);
-            const browser = await puppeteer.launch({
-                headless: false,
-                executablePath: browserPaths.chrome,
-                userDataDir: tmpDir,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--window-size=1920,1080',
-                    '--disable-blink-features=AutomationControlled'
-                ],
-                ignoreDefaultArgs: ['--enable-automation']
-            });
-            console.log('✅ Chromeで起動しました');
-            return browser;
-        } catch (e) {
-            console.log('⚠️ Chromeの起動に失敗:', e.message);
         }
     }
     
@@ -267,7 +1125,6 @@ async function safeGoto(page, url, options = {}) {
             if (retries >= maxRetries) {
                 throw error;
             }
-            // 少し待ってから再試行
             await sleep(3000);
         }
     }
@@ -283,7 +1140,6 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         const page = await browser.newPage();
         await page.setViewport({ width: 1920, height: 1080 });
         
-        // エラーハンドリング設定
         page.on('error', err => {
             console.log('  ⚠️ ページエラー:', err.message);
         });
@@ -295,6 +1151,66 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         console.log('\n📱 Step 1: ChatGPT Login');
         await safeGoto(page, 'https://chatgpt.com/auth/login');
         await sleep(5000);
+        
+        // Turnstile（Cloudflare）チェック
+        console.log('  🔒 Turnstileチェック中...');
+        const turnstileDetected = await page.evaluate(() => {
+            const iframes = document.querySelectorAll('iframe');
+            for (const iframe of iframes) {
+                if (iframe.src && (
+                    iframe.src.includes('challenges.cloudflare.com') ||
+                    iframe.src.includes('turnstile')
+                )) {
+                    return true;
+                }
+            }
+            const labels = document.querySelectorAll('label, span, div');
+            for (const el of labels) {
+                const text = el.textContent || '';
+                if (text.includes('私はロボットではありません') || 
+                    text.includes('I\'m not a robot') ||
+                    text.includes('Verify you are human')) {
+                    return true;
+                }
+            }
+            return false;
+        });
+        
+        if (turnstileDetected) {
+            console.log('  ⚠️  Turnstile（Cloudflare）検出！');
+            console.log('  ========================================');
+            console.log('  手動でチェックボックスをクリックしてください。');
+            console.log('  ========================================');
+            
+            for (let i = 0; i < 60; i++) {
+                await sleep(1000);
+                const stillThere = await page.evaluate(() => {
+                    const iframes = document.querySelectorAll('iframe');
+                    for (const iframe of iframes) {
+                        if (iframe.src && (
+                            iframe.src.includes('challenges.cloudflare.com') ||
+                            iframe.src.includes('turnstile')
+                        )) {
+                            return true;
+                        }
+                    }
+                    return false;
+                });
+                
+                if (!stillThere) {
+                    console.log('  ✅ Turnstile突破確認！');
+                    break;
+                }
+                
+                if (i % 10 === 0 && i > 0) {
+                    console.log(`     待機中... ${i}秒経過`);
+                }
+            }
+            
+            await sleep(3000);
+        } else {
+            console.log('  ✅ Turnstileなし、または既に突破済み');
+        }
         
         // 「ログイン」ボタン
         console.log('  🔘 「ログイン」ボタンを探してクリック...');
@@ -312,10 +1228,9 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         console.log(`  ✅ メールアドレス入力: ${workspaceEmail}`);
         await sleep(5000);
         
-        // 続行ボタン（OpenAIのログインフォーム内のもののみ）
+        // 続行ボタン
         console.log('  🔘 続行ボタンを探してクリック...');
         const continueClicked = await page.evaluate(() => {
-            // OpenAIのログインフォーム内のボタンのみ対象
             const form = document.querySelector('form');
             if (form) {
                 const buttons = Array.from(form.querySelectorAll('button[type="submit"], button'));
@@ -335,7 +1250,7 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         }
         await sleep(5000);
         
-        // パスワードまたは検証コードを待機（見つかるまで無限ループ）
+        // パスワードまたは検証コードを待機
         console.log('  ⏳ パスワードまたは検証コード入力欄を待機中...');
         let passwordInput = null;
         let codeInput = null;
@@ -353,7 +1268,7 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         
         if (codeInput) {
             console.log('📱 検証コード検出');
-            const code = await getVerificationCode(workspaceEmail, workspacePassword);
+            const code = await getVerificationCode(browser, workspaceEmail, workspacePassword);
             if (code) {
                 await codeInput.type(code, { delay: 100 });
                 console.log(`  ✅ 検証コード入力: ${code}`);
@@ -372,7 +1287,6 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         // ログイン続行
         console.log('  🔘 ログイン続行ボタンを探してクリック...');
         const loginContinueClicked = await page.evaluate(() => {
-            // まずフォーム内のボタンを探す
             const form = document.querySelector('form');
             if (form) {
                 const buttons = Array.from(form.querySelectorAll('button[type="submit"], button'));
@@ -385,7 +1299,6 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
                     return true;
                 }
             }
-            // フォーム外でも探す
             const allButtons = Array.from(document.querySelectorAll('button[type="submit"], button'));
             const btn = allButtons.find(b => {
                 const text = b.textContent.trim().toLowerCase();
@@ -404,7 +1317,7 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         }
         await sleep(5000);
         
-        // ログイン成功を確認（成功するまで無限ループ）
+        // ログイン成功を確認
         console.log('  🔍 ログイン状態を確認中...');
         while (true) {
             const isLoggedIn = await page.evaluate(() => {
@@ -428,14 +1341,12 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         // ===== 2. 無料オファー画面へ =====
         console.log('\n🎁 Step 2: Get Free Offer');
         
-        // 料金ページへ移動（読み込まれるまで無限ループ）
         console.log('  🔄 料金ページへ移動中...');
         
         await page.evaluate(() => {
             window.location.hash = '#pricing';
         });
         
-        // 料金ページの要素が読み込まれるまで無限ループ
         while (true) {
             await sleep(2000);
             
@@ -455,7 +1366,6 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
                 break;
             }
             
-            // 一定間隔で直接アクセスも試行
             const currentUrl = await page.url();
             if (!currentUrl.includes('#pricing')) {
                 await page.evaluate(() => {
@@ -465,19 +1375,17 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         }
         await sleep(3000);
         
-        // 「無料オファーを受け取る」ボタン（複数方法で検索）
+        // 「無料オファーを受け取る」ボタン
         console.log('  🔘 無料オファーボタンを探しています...');
         
-        // 方法1: data-testidで検索（最も確実）
         let offerBtn = await page.$('button[data-testid="select-plan-button-teams-create"]');
         
         if (offerBtn) {
             console.log('  ✅ 無料オファーボタンを検出しました（data-testid）');
             await offerBtn.click();
             console.log('  ✅ 無料オファーボタンをクリックしました');
-            await sleep(30000); // 30秒待機（iframe読み込み待ち）
+            await sleep(30000);
         } else {
-            // 方法2: クラス名とテキストで検索（page.evaluate内で完結）
             const offerClicked = await page.evaluate(() => {
                 const buttons = Array.from(document.querySelectorAll('button[class*="purple"], button[class*="btn-"], button'));
                 const btn = buttons.find(b => {
@@ -496,9 +1404,8 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
             
             if (offerClicked) {
                 console.log('  ✅ 無料オファーボタンを検出してクリックしました（テキスト検索）');
-                await sleep(30000); // 30秒待機（iframe読み込み待ち）
+                await sleep(30000);
             } else {
-                // 見つかるまで無限ループで探す
                 while (true) {
                     const found = await page.evaluate(() => {
                         const buttons = Array.from(document.querySelectorAll('button[class*="purple"], button[class*="btn-"], button'));
@@ -531,82 +1438,121 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         
         // ===== 4. PayPalタブ選択 =====
         console.log('\n💳 Step 4: PayPal Selection');
-        
-        // まずStripeのiframeを探す（見つかるまで無限ループ）
+
+        const stripePayPalSelectors = getStripePayPalTabSelectors();
+        const stripePayPalFrameProbeSelectors = getStripePayPalFrameProbeSelectors();
+        const paypalSelectionStart = Date.now();
+        const paypalSelectionTimeoutMs = 45000;
         let stripeFrame = null;
-        while (!stripeFrame) {
-            try {
-                const stripeIframe = await page.$('iframe[src*="stripe"], iframe[name*="stripe"]');
-                if (stripeIframe) {
-                    stripeFrame = await stripeIframe.contentFrame();
-                    console.log('  ✅ Stripe iframeを検出しました');
+        let stripeFrameDetected = false;
+        let paypalTabClicked = false;
+        let lastPayPalWaitLogAt = 0;
+        let stripeCandidateSummaryLogged = false;
+
+        while (!paypalTabClicked && Date.now() - paypalSelectionStart < paypalSelectionTimeoutMs) {
+            const frameCandidates = getStripeFrameCandidates(page);
+            const directFrameCandidates = pickStripePaymentDirectCandidates(frameCandidates, 3);
+
+            if (!stripeFrame && frameCandidates.length > 0) {
+                stripeFrame = frameCandidates[0].frame;
+            }
+
+            if (!stripeFrameDetected && frameCandidates.length > 0) {
+                stripeFrameDetected = true;
+                console.log(`  ✅ Stripe iframeを検出しました (${frameCandidates.length}件)`);
+            }
+
+            if (!stripeCandidateSummaryLogged && frameCandidates.length > 0) {
+                stripeCandidateSummaryLogged = true;
+                const preview = frameCandidates
+                    .slice(0, 5)
+                    .map((candidate, index) => {
+                        const source = candidate.url || candidate.name || 'unknown';
+                        return `    ${index + 1}. priority=${candidate.priority} ${source.substring(0, 120)}`;
+                    });
+                console.log('  📋 Stripe候補フレーム:');
+                preview.forEach((line) => console.log(line));
+            }
+
+            if (!paypalTabClicked) {
+                for (const candidate of directFrameCandidates) {
+                    const exactClickResult = await tryClickExactPayPalHandle(candidate.frame);
+                    if (exactClickResult.clicked) {
+                        stripeFrame = candidate.frame;
+                        paypalTabClicked = true;
+                        console.log(`  ✅ Stripe iframe内のPayPalタブを選択しました (${exactClickResult.method})`);
+                        break;
+                    }
+
+                    const clickResult = await tryClickPayPalTab(candidate.frame, stripePayPalSelectors, { allowDeepSearch: false });
+                    if (!clickResult.clicked) {
+                        continue;
+                    }
+
+                    stripeFrame = candidate.frame;
+                    paypalTabClicked = true;
+                    console.log(`  ✅ Stripe iframe内のPayPalタブを選択しました (${clickResult.selector} / ${clickResult.method})`);
                     break;
                 }
-            } catch (e) {}
-            await sleep(1000);
-        }
-        
-        // PayPalタブを探してクリック
-        let paypalTabClicked = false;
-        
-        if (stripeFrame) {
-            // iframe内でPayPalタブを探す
-            try {
-                paypalTabClicked = await stripeFrame.evaluate(() => {
-                    const btn = document.querySelector('button[data-testid="paypal"], button[value="paypal"], #paypal-tab');
-                    if (btn) {
-                        btn.click();
-                        return true;
-                    }
-                    // テキストでも探す
-                    const buttons = Array.from(document.querySelectorAll('button'));
-                    const paypalBtn = buttons.find(b => 
-                        b.textContent.trim() === 'PayPal' ||
-                        b.getAttribute('aria-label')?.includes('PayPal') ||
-                        b.querySelector('img[alt*="PayPal"], img[src*="paypal"]')
-                    );
-                    if (paypalBtn) {
-                        paypalBtn.click();
-                        return true;
-                    }
-                    return false;
-                });
-                
-                if (paypalTabClicked) {
-                    console.log('  ✅ Stripe iframe内のPayPalタブを選択しました');
-                    await sleep(5000);
+            }
+
+            if (!paypalTabClicked) {
+                const pageExactClickResult = await tryClickExactPayPalHandle(page);
+                if (pageExactClickResult.clicked) {
+                    paypalTabClicked = true;
+                    console.log(`  ✅ PayPalタブを選択しました (${pageExactClickResult.method})`);
+                    break;
                 }
-            } catch (frameError) {
-                console.log('  ⚠️ iframe内のPayPalタブ選択エラー:', frameError.message);
+
+                const pageClickResult = await tryClickPayPalTab(page, stripePayPalSelectors, { allowDeepSearch: false });
+                if (pageClickResult.clicked) {
+                    paypalTabClicked = true;
+                    console.log(`  ✅ PayPalタブを選択しました (${pageClickResult.selector} / ${pageClickResult.method})`);
+                    break;
+                }
+            }
+
+            if (!paypalTabClicked && frameCandidates.length > 0) {
+                const paymentFrameSearch = await findBestStripePaymentFrame(page, stripePayPalFrameProbeSelectors, frameCandidates);
+
+                if (paymentFrameSearch.bestCandidate) {
+                    stripeFrame = paymentFrameSearch.bestCandidate.frame;
+                    console.log(`  🎯 PayPal候補フレームを選択しました (probe=${paymentFrameSearch.bestCandidate.matchedProbeCount || 0})`);
+                    if (paymentFrameSearch.bestCandidate.matchedSelectors?.length) {
+                        console.log(`  🧪 PayPal一致セレクタ: ${paymentFrameSearch.bestCandidate.matchedSelectors.join(', ')}`);
+                    }
+
+                    const exactClickResult = await tryClickExactPayPalHandle(stripeFrame);
+                    if (exactClickResult.clicked) {
+                        paypalTabClicked = true;
+                        console.log(`  ✅ Stripe iframe内のPayPalタブを選択しました (${exactClickResult.method})`);
+                    } else {
+                        const clickResult = await tryClickPayPalTab(stripeFrame, stripePayPalSelectors, { allowDeepSearch: true });
+                        if (clickResult.clicked) {
+                            paypalTabClicked = true;
+                            console.log(`  ✅ Stripe iframe内のPayPalタブを選択しました (${clickResult.selector} / ${clickResult.method})`);
+                        }
+                    }
+                }
+            }
+
+            if (!paypalTabClicked && Date.now() - lastPayPalWaitLogAt >= 5000) {
+                lastPayPalWaitLogAt = Date.now();
+                const elapsedSeconds = Math.round((Date.now() - paypalSelectionStart) / 1000);
+                console.log(`  ⏳ PayPalタブを探索中... (${elapsedSeconds}秒経過)`);
+            }
+
+            if (!paypalTabClicked) {
+                await sleep(1000);
             }
         }
-        
-        // iframe内で見つからなかった場合、メインページでも探す
-        if (!paypalTabClicked) {
-            paypalTabClicked = await page.evaluate(() => {
-                const btn = document.querySelector('button[data-testid="paypal"], button[value="paypal"], #paypal-tab');
-                if (btn) {
-                    btn.click();
-                    return true;
-                }
-                const buttons = Array.from(document.querySelectorAll('button'));
-                const paypalBtn = buttons.find(b => 
-                    b.textContent.trim() === 'PayPal' ||
-                    b.getAttribute('aria-label')?.includes('PayPal')
-                );
-                if (paypalBtn) {
-                    paypalBtn.click();
-                    return true;
-                }
-                return false;
-            });
-            
-            if (paypalTabClicked) {
-                console.log('  ✅ PayPalタブを選択しました');
-                await sleep(5000);
-            } else {
-                console.log('  ℹ️ PayPalタブが見つかりませんでした（自動的に進むかもしれません）');
-            }
+
+        if (!stripeFrameDetected) {
+            console.log('  ⚠️ Stripe iframeを検出できませんでした');
+        } else if (!paypalTabClicked) {
+            console.log('  ⚠️ PayPalタブを選択できませんでした。住所フォームを直接探索します');
+        } else {
+            await sleep(5000);
         }
         
         // PayPal選択後、住所入力用のiframeを取得し直す
@@ -614,38 +1560,35 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         console.log('  ⏳ 住所入力フォームの読み込みを待機中...');
         await sleep(5000);
         
-        // 住所入力用のStripe iframeを再取得（別のiframeの可能性がある）
         let addressFrame = null;
+        const addressFrameProbeSelectors = getStripeAddressFrameProbeSelectors();
+        let addressCandidateSummaryLogged = false;
+
         for (let i = 0; i < 15; i++) {
-            try {
-                // 住所入力用のiframeを探す（elements-inner-address）
-                const addressIframe = await page.waitForSelector('iframe[src*="elements-inner-address"], iframe[name*="StripeFrame"]', { timeout: 5000 });
-                if (addressIframe) {
-                    addressFrame = await addressIframe.contentFrame();
-                    console.log('  ✅ 住所入力用iframeを検出しました');
-                    break;
+            const addressSearch = await findBestStripeAddressFrame(page, addressFrameProbeSelectors);
+
+            if (!addressCandidateSummaryLogged && addressSearch.candidates.length > 0) {
+                addressCandidateSummaryLogged = true;
+                console.log('  📋 住所候補フレーム:');
+                addressSearch.candidates.slice(0, 5).forEach((candidate, index) => {
+                    const source = candidate.url || candidate.name || 'unknown';
+                    console.log(`    ${index + 1}. priority=${candidate.priority} probe=${candidate.matchedProbeCount} inputs=${candidate.inputCount} ${source.substring(0, 120)}`);
+                });
+            }
+
+            if (addressSearch.bestCandidate && (addressSearch.bestCandidate.matchedProbeCount || 0) > 0) {
+                addressFrame = addressSearch.bestCandidate.frame;
+                console.log(`  ✅ 住所入力用iframeを検出しました (probe=${addressSearch.bestCandidate.matchedProbeCount})`);
+                if (addressSearch.bestCandidate.matchedSelectors?.length) {
+                    console.log(`  🧪 一致セレクタ: ${addressSearch.bestCandidate.matchedSelectors.join(', ')}`);
                 }
-            } catch (e) {
-                // 見つからない場合は別のセレクタも試す
-                try {
-                    const allIframes = await page.$$('iframe');
-                    for (const iframe of allIframes) {
-                        const src = await iframe.evaluate(el => el.src);
-                        if (src && src.includes('stripe') && src.includes('address')) {
-                            addressFrame = await iframe.contentFrame();
-                            console.log('  ✅ 住所入力用iframeを検出しました（代替方法）');
-                            break;
-                        }
-                    }
-                    if (addressFrame) break;
-                } catch (e2) {}
+                break;
             }
             
             console.log(`    Waiting for address iframe... (${i + 1}/15)`);
             await sleep(2000);
         }
         
-        // 方法3: page.frames()を使って全フレームから探す
         if (!addressFrame) {
             console.log('  🔍 Searching in all frames...');
             const allFrames = page.frames();
@@ -663,12 +1606,10 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
             }
         }
         
-        // 住所入力用iframeが見つからない場合は、元のstripeFrameを使う
         if (!addressFrame) {
             addressFrame = stripeFrame;
         }
         
-        // iframe情報をデバッグ表示
         if (addressFrame) {
             try {
                 const frameUrl = addressFrame.url();
@@ -676,7 +1617,6 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
             } catch (e) {}
         }
         
-        // iframeが完全に読み込まれるまで待機
         if (addressFrame) {
             console.log('  ⏳ Waiting for iframe to fully load...');
             try {
@@ -693,61 +1633,45 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         // ===== 5. Address Entry =====
         console.log('\n🏠 Step 5: Entering French Address');
         const address = await generateFrenchAddress();
+        console.log(`  📦 生成プロフィール: ${JSON.stringify(address)}`);
         
-        // Shadow DOMやiframe内の要素を含めて検索
         console.log('  📝 Entering address...');
         
-        // スクリーンショットを取得（デバッグ用）
         try {
             await page.screenshot({ path: 'debug_address_form.png' });
             console.log('    📸 Screenshot saved: debug_address_form.png');
         } catch (e) {}
         
         let inputSuccess = false;
+        const stripeAddressSelectors = getStripeAddressFieldSelectors();
         
-        // 方法1: page.evaluate() でShadow DOMを含む全要素を検索・入力
         console.log('    📝 Trying page.evaluate() for Shadow DOM access...');
         try {
             const evalResult = await page.evaluate((addr) => {
                 console.log('Starting address entry...');
                 
-                // まず全iframeを確認
                 const iframes = document.querySelectorAll('iframe');
                 console.log(`Found ${iframes.length} iframes`);
                 
-                // ヘルパー: Shadow DOMを含めて要素を探す（再帰的）
                 function queryDeep(selector) {
-                    // 通常のDOM
                     let el = document.querySelector(selector);
-                    if (el) {
-                        console.log(`Found ${selector} in normal DOM`);
-                        return el;
-                    }
+                    if (el) return el;
                     
-                    // iframe内
                     for (const iframe of document.querySelectorAll('iframe')) {
                         try {
                             if (iframe.contentDocument) {
                                 el = iframe.contentDocument.querySelector(selector);
-                                if (el) {
-                                    console.log(`Found ${selector} in iframe`);
-                                    return el;
-                                }
+                                if (el) return el;
                             }
                         } catch (e) {}
                     }
                     
-                    // Shadow DOM内（再帰的）
                     function searchShadowDOM(root, selector) {
                         const all = root.querySelectorAll('*');
                         for (const elem of all) {
                             if (elem.shadowRoot) {
                                 const found = elem.shadowRoot.querySelector(selector);
-                                if (found) {
-                                    console.log(`Found ${selector} in shadow DOM`);
-                                    return found;
-                                }
-                                // ネストしたShadow DOMを検索
+                                if (found) return found;
                                 const nested = searchShadowDOM(elem.shadowRoot, selector);
                                 if (nested) return nested;
                             }
@@ -761,11 +1685,9 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
                 let count = 0;
                 const results = [];
                 
-                // すべてのinput/selectをログ
                 const allInputs = document.querySelectorAll('input, select');
                 console.log(`Total inputs on page: ${allInputs.length}`);
                 
-                // 名前
                 const name = queryDeep('#billingAddress-nameInput') || 
                             queryDeep('input[name="name"]') ||
                             queryDeep('input[autocomplete*="name"]');
@@ -782,18 +1704,17 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
                     console.log('Name input not found');
                 }
                 
-                // 国
                 const country = queryDeep('#billingAddress-countryInput') ||
                                queryDeep('select[name="country"]');
                 if (country) {
-                    country.value = 'FR';
+                    country.value = addr.countryCode || 'FR';
+                    country.dispatchEvent(new Event('input', { bubbles: true }));
                     country.dispatchEvent(new Event('change', { bubbles: true }));
                     count++;
                     results.push('country');
-                    console.log('Country filled: FR');
+                    console.log('Country filled:', addr.countryCode || 'FR');
                 }
                 
-                // 住所
                 const street = queryDeep('#billingAddress-addressLine1Input') ||
                               queryDeep('input[name="addressLine1"]');
                 if (street) {
@@ -807,7 +1728,6 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
                     console.log('Street filled:', addr.street);
                 }
                 
-                // 郵便番号
                 const postal = queryDeep('#billingAddress-postalCodeInput') ||
                               queryDeep('input[name="postalCode"]');
                 if (postal) {
@@ -821,7 +1741,6 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
                     console.log('Postal filled:', addr.postalCode);
                 }
                 
-                // 都市
                 const city = queryDeep('#billingAddress-localityInput') ||
                             queryDeep('input[name="locality"]') ||
                             queryDeep('input[name="city"]');
@@ -847,73 +1766,157 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         } catch (e) {
             console.log('      ⚠️ page.evaluate() failed:', e.message);
         }
-        
-        // 方法2: addressFrame経由でtype()（クロスオリジンiframe対応）
-        if (!inputSuccess && addressFrame) {
-            console.log('    📝 Trying addressFrame.type() method...');
-            let successCount = 0;
 
-            async function findAndTypeInFrame(frame, selectors, value, fieldName) {
-                for (const selector of selectors) {
-                    try {
-                        const el = await frame.waitForSelector(selector, { timeout: 3000, visible: true });
-                        if (el) {
-                            await el.click({ clickCount: 3 });
-                            await el.type(value, { delay: 30 });
-                            console.log(`      ✅ ${fieldName}: ${value}`);
-                            return true;
+        if (!inputSuccess && addressFrame) {
+            console.log('    📝 Trying addressFrame.evaluate() for Shadow DOM access...');
+            try {
+                const evalResult = await addressFrame.evaluate((addr, selectors) => {
+                    function queryDeep(selector, root) {
+                        const base = root || document;
+                        const direct = base.querySelector(selector);
+                        if (direct) return direct;
+
+                        const nodes = base.querySelectorAll('*');
+                        for (const node of nodes) {
+                            if (node.shadowRoot) {
+                                const found = queryDeep(selector, node.shadowRoot);
+                                if (found) return found;
+                            }
                         }
-                    } catch (e) {}
+                        return null;
+                    }
+
+                    function dispatchInputEvents(el) {
+                        el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+
+                    function setNativeValue(el, value) {
+                        const prototype = el.tagName === 'SELECT'
+                            ? window.HTMLSelectElement.prototype
+                            : el.tagName === 'TEXTAREA'
+                                ? window.HTMLTextAreaElement.prototype
+                                : window.HTMLInputElement.prototype;
+                        const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+                        if (descriptor && descriptor.set) {
+                            descriptor.set.call(el, value);
+                        } else {
+                            el.value = value;
+                        }
+                    }
+
+                    function setValue(el, value) {
+                        try { el.focus(); } catch (e) {}
+                        setNativeValue(el, value);
+                        dispatchInputEvents(el);
+                        el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+                        try { el.blur(); } catch (e) {}
+                    }
+
+                    function fillBySelectors(list, value, options) {
+                        for (const selector of list) {
+                            const el = queryDeep(selector);
+                            if (!el) continue;
+
+                            if (options && options.country) {
+                                if (el.tagName === 'SELECT') {
+                                    setNativeValue(el, addr.countryCode || 'FR');
+                                    dispatchInputEvents(el);
+                                    return selector;
+                                }
+                                if (el.tagName === 'INPUT') {
+                                    setValue(el, addr.countryName || 'France');
+                                    return selector;
+                                }
+                                if (el.tagName === 'BUTTON') {
+                                    el.click();
+                                    return selector;
+                                }
+                                continue;
+                            }
+
+                            setValue(el, value);
+                            return selector;
+                        }
+                        return null;
+                    }
+
+                    const fields = [];
+                    if (fillBySelectors(selectors.name, addr.name)) fields.push('name');
+                    if (fillBySelectors(selectors.country, 'FR', { country: true })) fields.push('country');
+                    if (fillBySelectors(selectors.line1, addr.street)) fields.push('street');
+                    if (fillBySelectors(selectors.postal, addr.postalCode)) fields.push('postal');
+                    if (fillBySelectors(selectors.city, addr.city)) fields.push('city');
+
+                    return { count: fields.length, fields };
+                }, address, stripeAddressSelectors);
+
+                console.log(`      Filled fields (frame.evaluate): ${evalResult.fields.join(', ')} (${evalResult.count}/5)`);
+                if (evalResult.count >= 3) {
+                    console.log('      ✅ Address entered via addressFrame.evaluate()');
+                    inputSuccess = true;
                 }
-                return false;
+            } catch (e) {
+                console.log('      ⚠️ addressFrame.evaluate() failed:', e.message);
+            }
+        }
+        
+        if (!inputSuccess && addressFrame) {
+            console.log('    📝 Trying verified ElementHandle fill method...');
+            let successCount = 0;
+            
+            if (await fillStripeFieldBySelectors(addressFrame, stripeAddressSelectors.name, address.name, 'Name')) successCount++;
+            await sleep(300);
+
+            if (await fillStripeFieldBySelectors(
+                addressFrame,
+                stripeAddressSelectors.country,
+                address.countryCode || 'FR',
+                'Country',
+                {
+                    countryMode: true,
+                    countryCode: address.countryCode || 'FR',
+                    countryName: address.countryName || 'France'
+                }
+            )) {
+                successCount++;
+                await sleep(500);
             }
 
-            if (await findAndTypeInFrame(addressFrame, ['#billingAddress-nameInput', 'input[name="name"]', 'input[autocomplete*="name"]'], address.name, 'Name')) successCount++;
-            await sleep(200);
+            if (await fillStripeFieldBySelectors(addressFrame, stripeAddressSelectors.line1, address.street, 'Address')) successCount++;
+            await sleep(300);
 
-            try {
-                const country = await addressFrame.waitForSelector('#billingAddress-countryInput, select[name="country"]', { timeout: 2000 });
-                if (country) { await country.select('FR'); console.log('      ✅ Country: France'); successCount++; }
-            } catch (e) {}
-            await sleep(200);
+            if (await fillStripeFieldBySelectors(addressFrame, stripeAddressSelectors.postal, address.postalCode, 'Postal Code')) successCount++;
+            await sleep(300);
 
-            if (await findAndTypeInFrame(addressFrame, ['#billingAddress-addressLine1Input', 'input[name="addressLine1"]'], address.street, 'Address')) successCount++;
-            await sleep(200);
+            if (await fillStripeFieldBySelectors(addressFrame, stripeAddressSelectors.city, address.city, 'City')) successCount++;
 
-            if (await findAndTypeInFrame(addressFrame, ['#billingAddress-postalCodeInput', 'input[name="postalCode"]'], address.postalCode, 'Postal Code')) successCount++;
-            await sleep(200);
-
-            if (await findAndTypeInFrame(addressFrame, ['#billingAddress-localityInput', 'input[name="city"]', 'input[name="locality"]'], address.city, 'City')) successCount++;
+            console.log(`      Filled fields (verified handles): ${successCount}/5`);
 
             inputSuccess = successCount >= 3;
         }
         
-        // 最終フォールバック: メインページで直接探す
         if (!inputSuccess) {
             console.log('  📝 Final fallback: searching on main page...');
             
-            // 名前 (Name)
             const nameInput = await page.$('#billingAddress-nameInput, input[name="name"]');
             if (nameInput) {
                 await nameInput.type(address.name, { delay: 50 });
                 console.log(`    ✅ Name: ${address.name}`);
             }
             
-            // 住所 (Address)
             const streetInput = await page.$('#billingAddress-addressLine1Input, input[name="addressLine1"]');
             if (streetInput) {
                 await streetInput.type(address.street, { delay: 50 });
                 console.log(`    ✅ Address: ${address.street}`);
             }
             
-            // 郵便番号 (Postal Code)
             const postalInput = await page.$('#billingAddress-postalCodeInput, input[name="postalCode"]');
             if (postalInput) {
                 await postalInput.type(address.postalCode, { delay: 50 });
                 console.log(`    ✅ Postal Code: ${address.postalCode}`);
             }
             
-            // 都市 (City)
             const cityInput = await page.$('#billingAddress-localityInput, input[name="city"], input[name="locality"]');
             if (cityInput) {
                 await cityInput.type(address.city, { delay: 50 });
@@ -923,31 +1926,23 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
             await sleep(2000);
         }
         
-        // エラーモニター関数：不明なエラーを検出して「もう一度試す」をクリック
+        // エラーモニター関数
         async function monitorAndRetryError() {
             console.log('  🔍 エラーモニターを開始...');
             
-            const maxCheckAttempts = 60; // 最大60回チェック（約2分）
+            const subscribePatterns = ['subscribe', 'start trial', 'start your free', 'get started', 'continue', '登録', '開始'];
+            const confirmPatterns = ['agree', 'confirm', 'pay', 'complete', '同意', '確定', 'authorize'];
+            const maxCheckAttempts = 60;
             for (let i = 0; i < maxCheckAttempts; i++) {
-                await sleep(2000); // 2秒ごとにチェック
+                await sleep(2000);
                 
                 try {
-                    // 不明なエラーメッセージを検出
-                    const hasUnknownError = await page.evaluate(() => {
-                        const errorElements = document.querySelectorAll('span._root_xeddl_1, .error-message, div[class*="error"]');
-                        for (const el of errorElements) {
-                            const text = el.textContent;
-                            if (text && (text.includes('不明なエラーが発生しました') || text.includes('An unknown error occurred'))) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    });
+                    const snapshot = await collectCheckoutSnapshot(page, browser, subscribePatterns, confirmPatterns);
+                    const progress = classifyCheckoutProgress(snapshot);
                     
-                    if (hasUnknownError) {
+                    if (progress.state === 'error') {
                         console.log('  ⚠️ 不明なエラーを検出しました。「もう一度試す」ボタンを探します...');
                         
-                        // 「もう一度試す」ボタンを探してクリック
                         const retryClicked = await page.evaluate(() => {
                             const buttons = Array.from(document.querySelectorAll('button'));
                             const retryBtn = buttons.find(b => {
@@ -965,46 +1960,39 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
                         
                         if (retryClicked) {
                             console.log('  ✅ 「もう一度試す」ボタンをクリックしました。処理を継続します...');
-                            await sleep(5000); // リトライ後の読み込み待機
-                            return true; // リトライ成功
+                            await sleep(5000);
+                            return { action: 'retry', reason: progress.reason };
                         } else {
                             console.log('  ⚠️ 「もう一度試す」ボタンが見つかりませんでした');
                         }
                     }
                     
-                    // 成功メッセージや次の画面が表示されたら終了
-                    const isSuccess = await page.evaluate(() => {
-                        return document.querySelector('[data-testid="success"]') !== null ||
-                               document.querySelector('.success-message') !== null ||
-                               window.location.href.includes('/success');
-                    });
-                    
-                    if (isSuccess) {
+                    if (progress.state === 'success') {
                         console.log('  ✅ 成功画面が検出されました');
-                        return false; // 成功したので監視終了
+                        return { action: 'success', reason: progress.reason };
+                    }
+
+                    if (progress.state === 'progress') {
+                        console.log(`  ✅ 次のステップへの進行を検出しました (${progress.reason})`);
+                        return { action: 'progress', reason: progress.reason };
                     }
                     
-                } catch (e) {
-                    // エラーが発生しても続行
-                }
+                } catch (e) {}
                 
-                // 30秒ごとに進捗を表示
                 if (i % 15 === 0 && i > 0) {
                     console.log(`  ⏳ エラーモニター実行中... (${i * 2}秒経過)`);
                 }
             }
             
             console.log('  ℹ️ エラーモニターを終了します');
-            return false;
+            return { action: 'timeout', reason: 'timeout' };
         }
         
         // ===== 6. サブスクリプション登録（Subscribeボタン） =====
         console.log('\n📝 Step 6: Subscribe');
         await sleep(3000);
         
-        // ボタン検索ヘルパー（iframeとメインページの両方を試行）
         async function findAndClickButton(textPatterns) {
-            // まず住所入力iframeで検索
             if (addressFrame) {
                 try {
                     const clicked = await addressFrame.evaluate((patterns) => {
@@ -1023,7 +2011,6 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
                 } catch (e) {}
             }
             
-            // メインページで検索
             try {
                 const clicked = await page.evaluate((patterns) => {
                     const buttons = Array.from(document.querySelectorAll('button, input[type="submit"]'));
@@ -1041,11 +2028,8 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
             } catch (e) {}
             
             return false;
-            
-            return clicked ? 'page' : false;
         }
         
-        // Subscribeボタンを見つかるまで探す
         console.log('  🔘 Subscribeボタンを探しています...');
         while (true) {
             const subscribeSource = await findAndClickButton(['subscribe', 'start trial', 'start your free', 'get started', 'continue', '登録', '開始']);
@@ -1053,40 +2037,79 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
                 console.log(`  ✅ Subscribeボタンをクリックしました (${subscribeSource})`);
                 await sleep(5000);
                 
-                // エラーモニター開始
-                const retried = await monitorAndRetryError();
-                if (retried) {
+                const subscribeMonitorResult = await monitorAndRetryError();
+                if (subscribeMonitorResult.action === 'retry') {
                     console.log('  🔄 エラーが検出されてリトライしました。処理を継続します...');
+                } else if (subscribeMonitorResult.action === 'progress') {
+                    console.log(`  ➡️ Subscribe後の進行を確認しました (${subscribeMonitorResult.reason})`);
                 }
                 break;
             }
             await sleep(1000);
         }
+        
+        // ===== PayPal手動認証モード =====
+        console.log('\n========================================');
+        console.log('👤 PayPal手動認証モード');
+        console.log('========================================');
+        console.log('PayPalのボット検出を回避するため、手動で認証を行ってください。');
+        console.log('');
+        console.log('【手順】');
+        console.log('1. ブラウザでPayPalログイン画面が表示されます');
+        console.log('2. PayPalアカウントでログインしてください');
+        console.log('3. 支払い承認ボタンをクリックしてください');
+        console.log('4. 処理が完了したら、このコンソールでEnterキーを押してください');
+        console.log('========================================\n');
+        
+        console.log('⏳ PayPal画面の読み込みを待機中... (30秒)');
+        await sleep(30000);
+        
+        const currentUrl = await page.url();
+        console.log(`📍 現在のURL: ${currentUrl}`);
+        
+        if (currentUrl.includes('paypal.com') || currentUrl.includes('captcha')) {
+            console.log('⚠️  PayPalの認証が必要です。ブラウザで手動操作を行ってください。');
+        }
+        
+        console.log('\n🖱️  ブラウザでPayPal認証を完了してください。');
+        console.log('✅ 完了したら、このコンソールでEnterキーを押してください...');
+        console.log('⏱️  （タイムアウト: 10分）\n');
+        
+        await waitForEnter(600000);
+        
+        console.log('✅ 手動認証が完了しました。自動処理を再開します...\n');
+        
+        await sleep(5000);
         
         // ===== 7. 同意して続行（必要な場合） =====
         console.log('\n✅ Step 7: Confirm');
         
-        // 同意ボタンを見つかるまで探す
-        while (true) {
+        let confirmClicked = false;
+        for (let i = 0; i < 5; i++) {
             const consentSource = await findAndClickButton(['agree', 'confirm', 'pay', 'complete', '同意', '確定', 'authorize']);
             if (consentSource) {
                 console.log(`  ✅ 同意/確定ボタンをクリックしました (${consentSource})`);
                 await sleep(5000);
+                confirmClicked = true;
                 
-                // エラーモニター開始
-                const retried2 = await monitorAndRetryError();
-                if (retried2) {
+                const confirmMonitorResult = await monitorAndRetryError();
+                if (confirmMonitorResult.action === 'retry') {
                     console.log('  🔄 エラーが検出されてリトライしました。処理を継続します...');
+                } else if (confirmMonitorResult.action === 'progress') {
+                    console.log(`  ➡️ Confirm後の進行を確認しました (${confirmMonitorResult.reason})`);
                 }
                 break;
             }
             await sleep(1000);
         }
         
-        // 最終エラーチェック
+        if (!confirmClicked) {
+            console.log('  ℹ️ 確定ボタンが見つかりませんでした（手動で処理済みの可能性）');
+        }
+        
         console.log('  🔍 最終エラーチェック...');
-        const finalRetried = await monitorAndRetryError();
-        if (finalRetried) {
+        const finalMonitorResult = await monitorAndRetryError();
+        if (finalMonitorResult.action === 'retry') {
             console.log('  🔄 最終チェックでエラーが検出されてリトライしました');
         }
         
@@ -1105,7 +2128,6 @@ async function activateFreeOffer(workspaceEmail, workspacePassword) {
         try {
             await browser.close();
         } catch (closeError) {
-            // ブラウザが既に閉じられている場合は無視
             console.log('  ℹ️ ブラウザは既に閉じられています');
         }
         throw error;

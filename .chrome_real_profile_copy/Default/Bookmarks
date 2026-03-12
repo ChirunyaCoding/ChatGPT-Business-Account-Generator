@@ -1,0 +1,1043 @@
+{
+   "checksum": "96f9f8afaaf9686b02b0fa03fa08c142",
+   "roots": {
+      "bookmark_bar": {
+         "children": [ {
+            "date_added": "13402054345705992",
+            "date_last_used": "13402215709226512",
+            "guid": "582f6d3a-7fa9-4ff1-8e8b-c48f85cfa214",
+            "id": "458",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "マンガ",
+            "type": "url",
+            "url": "http://localhost:8000/"
+         }, {
+            "date_added": "13401873864279112",
+            "date_last_used": "0",
+            "guid": "f4c75d6e-1467-4220-990c-882b4bd37119",
+            "id": "432",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "dotinstall",
+            "type": "url",
+            "url": "file:///I:/Programming/PF/2025/8/Programming_Study/videos/"
+         }, {
+            "date_added": "13386652468173656",
+            "date_last_used": "0",
+            "guid": "8781a206-10de-40ec-bed0-201d1ae9425b",
+            "id": "5",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "",
+            "type": "url",
+            "url": "https://my.au.com/aus/hc-cs/omt/OMT0010001.hc?aa_bid=we-myuq-gn-1616"
+         }, {
+            "date_added": "13344869995938026",
+            "date_last_used": "13400092554547500",
+            "guid": "3e93ff6e-195d-4355-89a3-dffb3571844d",
+            "id": "6",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "",
+            "type": "url",
+            "url": "https://mail.google.com/mail/u/0/#inbox"
+         }, {
+            "date_added": "13374952896169651",
+            "date_last_used": "13399961490621433",
+            "guid": "651f4afd-80a1-442f-853d-26b486d86a25",
+            "id": "7",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "",
+            "type": "url",
+            "url": "https://drive.google.com/drive/u/0/my-drive"
+         }, {
+            "date_added": "13375384783485334",
+            "date_last_used": "13400089406839838",
+            "guid": "0603e829-5b0c-4249-bb40-a1efb2b7cd16",
+            "id": "8",
+            "name": "",
+            "type": "url",
+            "url": "https://www.youtube.com/"
+         }, {
+            "date_added": "13400173328760006",
+            "date_last_used": "0",
+            "guid": "11522cc7-c09d-4a0b-be86-7141802cf2f0",
+            "id": "374",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "YT",
+            "type": "url",
+            "url": "https://chihalucoding.github.io/YouTube_Live_Watch/index.html"
+         }, {
+            "date_added": "13365164826520434",
+            "date_last_used": "13399452791005831",
+            "guid": "8b60494c-78b4-4c02-8fd8-1316b62c752d",
+            "id": "9",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "",
+            "type": "url",
+            "url": "https://www.amazon.co.jp/ref=nav_logo"
+         }, {
+            "date_added": "13380962004735248",
+            "date_last_used": "0",
+            "guid": "63ec717f-b08c-4738-90b9-0f97ff4407a9",
+            "id": "10",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "",
+            "type": "url",
+            "url": "https://jp.shein.com/"
+         }, {
+            "date_added": "13394111463616938",
+            "date_last_used": "13402203738897990",
+            "guid": "4e0e604a-0d30-4a6c-b44e-1f8f5d4552ff",
+            "id": "11",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "",
+            "type": "url",
+            "url": "https://x.com/mina0x0audrey"
+         }, {
+            "date_added": "13351966958710893",
+            "date_last_used": "13400685766266251",
+            "guid": "60883f4b-2b64-4dfd-baed-349ba596bca1",
+            "id": "12",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "",
+            "type": "url",
+            "url": "https://copilot.microsoft.com/?form=MY02E6&OCID=MY02E6&culture=ja-jp&country=jp&showconv=1"
+         }, {
+            "date_added": "13350202646618659",
+            "date_last_used": "13417760372956316",
+            "guid": "73fc7872-3675-4321-a9a2-f93cf62969fd",
+            "id": "13",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "",
+            "type": "url",
+            "url": "https://chat.openai.com/c/4e311ce6-5e8f-48ea-b853-b3cb5eb3e96e"
+         }, {
+            "date_added": "13384610207521057",
+            "date_last_used": "13400890793654413",
+            "guid": "3aeca495-1906-43c1-9597-2d001cee93c5",
+            "id": "15",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "",
+            "type": "url",
+            "url": "https://x.com/i/grok"
+         }, {
+            "date_added": "13393763628498953",
+            "date_last_used": "13400584267742127",
+            "guid": "996205c1-30d4-40c9-b9c9-92bca5a1c14c",
+            "id": "17",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "",
+            "type": "url",
+            "url": "https://github.com/copilot"
+         }, {
+            "date_added": "13369268753847379",
+            "date_last_used": "13369268768779002",
+            "guid": "bbeeb561-72b5-4ae5-b174-2ffb533265d2",
+            "id": "19",
+            "name": "",
+            "type": "url",
+            "url": "https://favicon-generator.mintsu-dev.com/"
+         }, {
+            "date_added": "13372598101836445",
+            "date_last_used": "13399528297403410",
+            "guid": "c77e2f86-2d74-4708-a4c1-833e9cc67e96",
+            "id": "20",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "",
+            "type": "url",
+            "url": "https://www.deepl.com/ja/translator"
+         }, {
+            "date_added": "13381406573255846",
+            "date_last_used": "13402319229485556",
+            "guid": "4f9a7d67-86a7-4985-98fb-bd2e467f771b",
+            "id": "21",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "",
+            "type": "url",
+            "url": "https://console.cloud.google.com/apis/credentials?hl=ja&inv=1&invt=Abm5kg&project=ytpremiere"
+         }, {
+            "date_added": "13395852506755362",
+            "date_last_used": "13400487612160605",
+            "guid": "6ecdc965-64da-4d24-af53-c468fd8c382e",
+            "id": "108",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "",
+            "type": "url",
+            "url": "https://hianime.to/home"
+         }, {
+            "date_added": "13394723576515407",
+            "date_last_used": "0",
+            "guid": "81b6b06d-7ca0-4653-a03c-c12bb0dbef47",
+            "id": "25",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "",
+            "type": "url",
+            "url": "https://codetime.dev/ja/dashboard"
+         }, {
+            "date_added": "13388753239040684",
+            "date_last_used": "13388753379385753",
+            "guid": "63385f76-6265-49dd-befa-c538dacb0124",
+            "id": "27",
+            "name": "",
+            "type": "url",
+            "url": "https://www.twitch.tv/hikakin"
+         }, {
+            "date_added": "13352379912894784",
+            "date_last_used": "13378811590468722",
+            "guid": "803f1f65-3b21-4259-bfd3-402ed4209818",
+            "id": "28",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "Fonts",
+            "type": "url",
+            "url": "https://fonts.google.com/icons"
+         }, {
+            "date_added": "13347106296238096",
+            "date_last_used": "13386068646711847",
+            "guid": "9b160be5-9e64-4a2d-a2be-d1f47c39aa21",
+            "id": "29",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "局在関連性",
+            "type": "url",
+            "url": "https://www.google.com/search?q=%E5%B1%80%E5%9C%A8%E9%96%A2%E9%80%A3%E6%80%A7%E3%81%A6%E3%82%93%E3%81%8B%E3%82%93&oq=%E3%81%8D%E3%82%87%E3%81%8F%E3%81%96%E3%81%84%E3%81%8B&gs_lcrp=EgZjaHJvbWUqCQgCEAAYBBiABDIGCAAQRRg5MgkIARAAGAQYgAQyCQgCEAAYBBiABDIJCAMQABgEGIAEMgkIBBAAGAQYgAQyCQgFEAAYBBiABDIJCAYQABgEGIAEMgkIBxAAGAQYgAQyCQgIEAAYBBiABDIJCAkQABgEGIAEMgkIChAAGAQYgAQyCQgLEAAYBBiABDIJCAwQABgEGIAEMgkIDRAAGAQYgAQyCQgOEAAYBBiABNIBCDQzNzRqMWo3qAIAsAIA&client=ms-android-samsung-rvo1&sourceid=chrome-mobile&ie=UTF-8"
+         }, {
+            "children": [ {
+               "date_added": "13384267465265416",
+               "date_last_used": "0",
+               "guid": "1b950510-9f67-4e85-bfce-f6e2c69432e3",
+               "id": "31",
+               "name": "【Note】普通の歩き｜株式会社モックス",
+               "type": "url",
+               "url": "https://mox-motion.com/blog/normalwalk/"
+            }, {
+               "date_added": "13384267465265449",
+               "date_last_used": "0",
+               "guid": "4302de7b-b222-4dcc-85c2-31c2d1de5c04",
+               "id": "32",
+               "name": "Splatoon Resources",
+               "type": "url",
+               "url": "https://splatoon-blender.onrender.com/resources?list=0"
+            }, {
+               "date_added": "13384267465265469",
+               "date_last_used": "0",
+               "guid": "0c30aa1b-84bc-480c-9712-9930957059a4",
+               "id": "33",
+               "name": "John Sandwich | creating Animations | Patreon",
+               "type": "url",
+               "url": "https://www.patreon.com/c/JohnSandwich/posts"
+            }, {
+               "date_added": "13384267465265490",
+               "date_last_used": "0",
+               "guid": "99503fb8-bb5d-411c-bc0e-54dbf7874d46",
+               "id": "34",
+               "name": "Salmonid Smokeyard | Blender 4.2 用のテクスチャ付きおよびアニメーション マップ/ステージ モデル [ スプラトゥーン 3 ] - fih の Ko-fi ショップ - Ko-fi ❤️ クリエイターが寄付、メンバーシップ、ショップ販売などを通じてファンからサポートを受けられる場所! オリジナルの「Buy Me a Coffee」ページ。",
+               "type": "url",
+               "url": "https://ko-fi.com/s/c3a31c2d59"
+            }, {
+               "date_added": "13384267465265564",
+               "date_last_used": "0",
+               "guid": "39b7eff6-d293-49a9-abe1-e481d53188d0",
+               "id": "35",
+               "name": "Open3DLab • Splatoon 3 - Splatsville",
+               "type": "url",
+               "url": "https://open3dlab.com/project/e763e229-1704-42cb-8480-f4957a8ee8a0/"
+            } ],
+            "date_added": "13384267465265078",
+            "date_last_used": "0",
+            "date_modified": "13384267465265564",
+            "guid": "c1c1be1e-ac54-404d-9525-72cad2675c5c",
+            "id": "30",
+            "name": "blender",
+            "type": "folder"
+         }, {
+            "date_added": "13400486787257432",
+            "date_last_used": "0",
+            "guid": "e17a5f95-1a9a-4647-9fb4-dc8d5b61b57c",
+            "id": "385",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "プログラミング - Miro",
+            "type": "url",
+            "url": "https://miro.com/app/board/uXjVJRaPSzs=/"
+         }, {
+            "children": [ {
+               "children": [ {
+                  "date_added": "13309599993432598",
+                  "date_last_used": "0",
+                  "guid": "12f33d24-13e9-4eda-a6c4-567e96163e1b",
+                  "id": "42",
+                  "name": "リクナビ2024｜インターンシップ・就活準備情報サイト",
+                  "type": "url",
+                  "url": "https://job.rikunabi.com/2024/?isc=r21rcnz00060"
+               }, {
+                  "date_added": "13309600432954704",
+                  "date_last_used": "0",
+                  "guid": "e62e9dff-3245-4e50-a38e-8e617cc5dae4",
+                  "id": "43",
+                  "name": "マイナビ2024 - 学生向けインターンシップ・就職情報サイト",
+                  "type": "url",
+                  "url": "https://job.mynavi.jp/24/pc/"
+               }, {
+                  "date_added": "13309601015669719",
+                  "date_last_used": "0",
+                  "guid": "92af3212-7187-4df2-be59-da1a5f7dce3f",
+                  "id": "44",
+                  "name": "仕事探し | Indeed (インディード)",
+                  "type": "url",
+                  "url": "https://jp.indeed.com/?from=gnav-resume--myind"
+               }, {
+                  "date_added": "13309614399659223",
+                  "date_last_used": "0",
+                  "guid": "d7f90f00-ae7c-43c3-8ea4-3cca89631294",
+                  "id": "45",
+                  "name": "クリ博ナビ2024｜就活・合同説明会・インターンの総合情報サイト",
+                  "type": "url",
+                  "url": "https://www.kurihaku.jp/2024/"
+               } ],
+               "date_added": "13309599991128806",
+               "date_last_used": "0",
+               "date_modified": "13309614399659223",
+               "guid": "613e3064-3abc-4d64-a646-c6292b3b73d5",
+               "id": "41",
+               "name": "就活",
+               "type": "folder"
+            }, {
+               "date_added": "13320755948818443",
+               "date_last_used": "13402301213708089",
+               "guid": "2434be0c-5383-4813-b557-0c3e595cf7b5",
+               "id": "46",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "フリーターの就職におすすめの職業11選｜就ける仕事は意外と多い！ – IT業界、エンジニア、就活生、第二新卒、転職者、20代向け情報サイト",
+               "type": "url",
+               "url": "https://www.acrovision.jp/career/?p=2345"
+            }, {
+               "date_added": "13324818585802457",
+               "date_last_used": "0",
+               "guid": "9ff6bdeb-beaf-4dbc-a3a2-80e6e67de481",
+               "id": "47",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "ジェイックの就職支援",
+               "type": "url",
+               "url": "https://www.jaic-college.jp/"
+            }, {
+               "date_added": "13332082853328747",
+               "date_last_used": "0",
+               "guid": "84b0d7d6-69d0-4c87-ad95-6f8631c121e1",
+               "id": "48",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "20代で就職・転職するなら、ニイゼロキャリア!",
+               "type": "url",
+               "url": "https://sunklis.co.jp/niizerocareer_lp-b/?ttclid=E.C.P.CogCyffD1lq1b31RXNp1gmLXqD9hsvYV-k4VbicOsYb5B1vjrUpV9b4isdOi9iP9pZ3e8URU7Nq3-P9nrKm-k6vPD1z-rmf25HUL0mILRAI4YLBJYBj7R6EUoO3JRjTy5fTSwnaB9ClNaUTSX8ZlTtDJ7-BStwNzp0vBTCE5AWhr4TZxanNp4a-4jgPA-S3zNA68D9nEyVVvjQKWXU6dNlIBNBTjeeegQVeLS4LOwIZZ9kDQ2VpP6m0EaPuTgzi53OhXX4DzLjq9ThrUWcwlJICADVALtnfEzxWP0QL4vMfXskq9IwEpaNGQMWgfBKn2sCR6Zo9p9D8i4jNL39-RLt2YNxNmEwtEMolyEgR2Mi4wGiAHnwzPP1h4PxPhmhQVJR6eoNfe-Y9BtEDeo-d49xxrEA"
+            }, {
+               "date_added": "13332083691935145",
+               "date_last_used": "0",
+               "guid": "a3a788a1-900e-41e6-908b-548a824fd4dc",
+               "id": "49",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "ハタラクティブ｜フリーター・既卒・第二新卒など若年層向け就職支援サイト",
+               "type": "url",
+               "url": "https://hataractive.jp/"
+            }, {
+               "date_added": "13332686890901282",
+               "date_last_used": "0",
+               "guid": "d578a9da-be6e-4fb7-93e4-d5ce73d0f969",
+               "id": "52",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "Webエンジニアとは？仕事内容・年収・資格について｜マイナビITエージェント",
+               "type": "url",
+               "url": "https://mynavi-agent.jp/it/jobindex/17.html#:~:text=Web%E3%82%A8%E3%83%B3%E3%82%B8%E3%83%8B%E3%82%A2%E3%81%AF%E3%80%81Web%E3%82%B5%E3%82%A4%E3%83%88%E3%83%BBEC%E3%82%B5%E3%82%A4%E3%83%88%E3%81%AA%E3%81%A9%E3%81%A7%E4%BD%BF%E7%94%A8,%E5%82%BE%E5%90%91%E3%81%AB%E3%81%82%E3%82%8B%E8%81%B7%E7%A8%AE%E3%81%A7%E3%81%99%E3%80%82"
+            } ],
+            "date_added": "13320755962305498",
+            "date_last_used": "0",
+            "date_modified": "13332686890901282",
+            "guid": "1093eadc-bccc-4515-a7f1-cdd3880264c6",
+            "id": "40",
+            "name": "就職",
+            "type": "folder"
+         }, {
+            "children": [ {
+               "date_added": "13349791979181325",
+               "date_last_used": "13400430824890397",
+               "guid": "846aaeed-e12c-4ae2-9ce5-3c182498456a",
+               "id": "54",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "【レベル別】模写コーディングにおすすめのサイト7選【初心者向け】 - じゅんぺいブログ",
+               "type": "url",
+               "url": "https://junpei-sugiyama.com/website-copy-coding-recommended/#st-toc-h-2"
+            }, {
+               "date_added": "13358087975360195",
+               "date_last_used": "0",
+               "guid": "d6dccd6a-07ab-4a1b-95d4-509f43f18714",
+               "id": "55",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "ぱくたそ - 会員登録不要、無料の写真素材・AI画像素材",
+               "type": "url",
+               "url": "https://www.pakutaso.com/"
+            }, {
+               "date_added": "13358088044262357",
+               "date_last_used": "0",
+               "guid": "e774d770-500b-49a2-b04a-4a214b8bc7e7",
+               "id": "56",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "おしゃれなフリー写真素材｜GIRLY DROP(ガーリードロップ)｜おしゃれなフリー写真素材：GIRLY DROP",
+               "type": "url",
+               "url": "https://girlydrop.com/"
+            }, {
+               "date_added": "13358088220852444",
+               "date_last_used": "0",
+               "guid": "cfb22e86-8ade-4831-8962-b0890c40ac1a",
+               "id": "57",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "Free Stock Photos and Images - StockSnap.io",
+               "type": "url",
+               "url": "https://stocksnap.io/"
+            }, {
+               "date_added": "13358088245100435",
+               "date_last_used": "0",
+               "guid": "27b288b0-2eea-4b6f-9476-c7042a44908d",
+               "id": "58",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "4.400万点以上の高品質なフリー画像素材 - Pixabay - Pixabay",
+               "type": "url",
+               "url": "https://pixabay.com/ja/"
+            }, {
+               "date_added": "13358088381949594",
+               "date_last_used": "0",
+               "guid": "6ced224e-4751-4034-af04-87425ca7f88f",
+               "id": "59",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "カラーパレットジェネレーター | Adobe Color",
+               "type": "url",
+               "url": "https://color.adobe.com/ja/"
+            }, {
+               "date_added": "13372612654629165",
+               "date_last_used": "0",
+               "guid": "73ba8460-3ad5-4de8-a05d-7a99a2c670ef",
+               "id": "60",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "Font Awesome",
+               "type": "url",
+               "url": "https://fontawesome.com/icons/categories/coding"
+            }, {
+               "date_added": "13372956939654714",
+               "date_last_used": "0",
+               "guid": "13d5da82-9a82-4477-95d7-4b61bf8c4a5c",
+               "id": "61",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "Browse Fonts - Google Fonts",
+               "type": "url",
+               "url": "https://fonts.google.com/"
+            }, {
+               "date_added": "13372036954739966",
+               "date_last_used": "13372934589509632",
+               "guid": "2057d5da-a31c-472c-835e-6f0fd9f1960b",
+               "id": "68",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "Codejump【旧 Codestep】 | 作って学ぶコーディング学習サイト（HTML、CSS、JavaScript、WordPress）",
+               "type": "url",
+               "url": "https://code-jump.com/"
+            } ],
+            "date_added": "13355820685108342",
+            "date_last_used": "0",
+            "date_modified": "13399489498386799",
+            "guid": "158d5510-b707-42c7-b7d4-1ac78c2cf864",
+            "id": "53",
+            "name": "HTML",
+            "type": "folder"
+         }, {
+            "children": [ {
+               "date_added": "13359884367622525",
+               "date_last_used": "13359899302647509",
+               "guid": "0112e43c-6a3d-414a-9de4-5fb84c381572",
+               "id": "63",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "小学１年生～６年生までの漢字｜ちびむすドリル【小学生】",
+               "type": "url",
+               "url": "https://happylilac.net/p-sy-kanzi.html"
+            }, {
+               "date_added": "13359884571716706",
+               "date_last_used": "0",
+               "guid": "251a7bee-c231-4d52-b167-cc5c854cc2e2",
+               "id": "64",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "小学生の漢字ドリル【すきるまドリル】　無料学習プリント | すきるまドリル｜幼児・小学生の無料学習プリント",
+               "type": "url",
+               "url": "https://sukiruma.net/kanzi-drill/"
+            }, {
+               "date_added": "13359900099022845",
+               "date_last_used": "0",
+               "guid": "133ed96d-9ef5-419f-85a6-3c1d19a04884",
+               "id": "65",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "オリジナル 練習用紙 手本 ダウンロード | ペン字 無料 練習 なら『ペン字の味方』",
+               "type": "url",
+               "url": "https://www.penji-mikata.com/practice#hiragana"
+            }, {
+               "date_added": "13369760958374784",
+               "date_last_used": "0",
+               "guid": "c8d908d4-e0c1-44b5-8b96-19e60617ed4f",
+               "id": "66",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "hakken.無料学習教材(小学生・中学生向けプリント教材) | 三重県・岐阜県の学習塾 hakken.(ハッケン)",
+               "type": "url",
+               "url": "https://www.hakken.biz/download.php"
+            }, {
+               "date_added": "13369588242905876",
+               "date_last_used": "13370008181302725",
+               "guid": "e7c60917-b8cc-41fe-98c1-636990934227",
+               "id": "67",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "小学生の漢字ワーク　２０２４年度改訂版【すきるまドリル】　無料学習プリント | すきるまドリル｜幼児・小学生の無料学習プリント",
+               "type": "url",
+               "url": "https://sukiruma.net/kanji-work/"
+            } ],
+            "date_added": "13361988669109909",
+            "date_last_used": "0",
+            "date_modified": "13369760958374784",
+            "guid": "004671da-9d32-4c4f-aed2-2699adfd4720",
+            "id": "62",
+            "name": "勉強",
+            "type": "folder"
+         }, {
+            "date_added": "13377937099378138",
+            "date_last_used": "13402301061864956",
+            "guid": "0128f8a3-829d-45f3-9708-cda0ca93a5b2",
+            "id": "69",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "新編 新しい算数 ４上ホーム",
+            "type": "url",
+            "url": "https://sw41.tsho.jp/06pk/m/4a/#b"
+         }, {
+            "date_added": "13388254174862016",
+            "date_last_used": "13400057979141291",
+            "guid": "b9cda08a-f3d5-416a-b5bf-db4776f9cc60",
+            "id": "70",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "",
+            "type": "url",
+            "url": "https://seostudio.tools/ja/youtube-channel-id"
+         }, {
+            "children": [ {
+               "date_added": "13392389678874308",
+               "date_last_used": "0",
+               "guid": "8b7eed33-a1d9-474f-bc47-810e7536060c",
+               "id": "72",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "すきるまドリル　４年生　「わり算の筆算（１）」 | 【すきるまドリル】 答え専用ページ",
+               "type": "url",
+               "url": "https://www.sukiruma.net/answer/4nen-warizanhi/"
+            }, {
+               "date_added": "13392389687874087",
+               "date_last_used": "0",
+               "guid": "82df77e0-24f3-4b15-baaa-f6cb4bbebe4c",
+               "id": "73",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "すきるまドリル　４年生　「わり算の筆算２」 | 【すきるまドリル】 答え専用ページ",
+               "type": "url",
+               "url": "https://www.sukiruma.net/answer/4nen-warizanhi2/"
+            }, {
+               "date_added": "13392389693851863",
+               "date_last_used": "0",
+               "guid": "99122d91-aa18-45ea-9328-6012df88c9ca",
+               "id": "74",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "すきるまドリル　４年生　「がい数の表し方」 | 【すきるまドリル】 答え専用ページ",
+               "type": "url",
+               "url": "https://www.sukiruma.net/answer/4nen-gaisu/"
+            }, {
+               "date_added": "13392389698685654",
+               "date_last_used": "0",
+               "guid": "0406f5ce-7d84-4bb3-bed6-f6cd256099ba",
+               "id": "75",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "すきるまドリル　４年生　「計算のきまり」 | 【すきるまドリル】 答え専用ページ",
+               "type": "url",
+               "url": "https://www.sukiruma.net/answer/4nen-keisanki/"
+            }, {
+               "date_added": "13392389704058221",
+               "date_last_used": "0",
+               "guid": "078c1300-e7f9-40a2-8466-9d66a09161a1",
+               "id": "76",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "すきるまドリル　４年生　「整理の仕方」 | 【すきるまドリル】 答え専用ページ",
+               "type": "url",
+               "url": "https://www.sukiruma.net/answer/4nen-seiri/"
+            } ],
+            "date_added": "13392389668771808",
+            "date_last_used": "0",
+            "date_modified": "13392389704058221",
+            "guid": "e9d67760-1f30-4b7f-97e5-966fbdc1580c",
+            "id": "71",
+            "name": "すきまドリル",
+            "type": "folder"
+         }, {
+            "date_added": "13393940394229653",
+            "date_last_used": "13400171903281255",
+            "guid": "85363228-286d-4fe1-840d-fdce1676583e",
+            "id": "77",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "AllDebrid",
+            "type": "url",
+            "url": "https://alldebrid.com/account/"
+         }, {
+            "children": [ {
+               "date_added": "13360915222760994",
+               "date_last_used": "13395430253665715",
+               "guid": "86cd7025-417a-42b1-b818-b0486f86a7ad",
+               "id": "38",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "ASMR",
+               "type": "url",
+               "url": "https://www.asmr.one/works"
+            }, {
+               "date_added": "13385815123524390",
+               "date_last_used": "13400002714047518",
+               "guid": "7817345f-9e45-4c8b-be33-1d846ad871d0",
+               "id": "36",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "",
+               "type": "url",
+               "url": "https://www.hentaiasmr.moe/?filter=latest"
+            }, {
+               "date_added": "13390239772547406",
+               "date_last_used": "13400171375806914",
+               "guid": "1adad429-baab-4e85-92ba-f89fa854dbdd",
+               "id": "37",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "",
+               "type": "url",
+               "url": "https://www.anime-sharing.com/forums/erotic.130/"
+            }, {
+               "date_added": "13396705776057481",
+               "date_last_used": "0",
+               "guid": "e4fb2017-8775-48a0-a6b1-f6ed69915878",
+               "id": "246",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "(7) 【まずはココから！】Cubaseの打ち込み徹底解説！ - YouTube",
+               "type": "url",
+               "url": "https://www.youtube.com/watch?v=h9K9aC22gFs"
+            }, {
+               "date_added": "13396705779561299",
+               "date_last_used": "0",
+               "guid": "f2ca99b6-3d47-443c-8763-4673c9152020",
+               "id": "247",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "(7) 【もう挫折しない】一番簡単なボカロ曲の作り方【作曲の仕方をプロが解説】 - YouTube",
+               "type": "url",
+               "url": "https://www.youtube.com/watch?v=FLd7-OfanII"
+            }, {
+               "date_added": "13396705802249634",
+               "date_last_used": "0",
+               "guid": "be5885bc-d622-497e-a1f6-b43898ac912a",
+               "id": "248",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "ボカロ調声ってどうやって勉強すればいいの？｜くろ州",
+               "type": "url",
+               "url": "https://note.com/96s_km4osm/n/nabae993909f1"
+            }, {
+               "date_added": "13396775758560403",
+               "date_last_used": "0",
+               "guid": "201646dc-65cb-4dba-9e1f-2a1f2b3ca2bb",
+               "id": "249",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "XC99600517SC1",
+               "type": "url",
+               "url": "file:///C:/Users/sakip/%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89/print-gakufu508329.pdf"
+            }, {
+               "date_added": "13396806605199612",
+               "date_last_used": "13401635510608471",
+               "guid": "86b0867f-4155-4b0c-babe-1812b981c989",
+               "id": "250",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "Hentai Voice ( 音声作品 ) - Download hentai upload daily | Anime | Manga | Game | CG | Comic | Hentai4Daily.com",
+               "type": "url",
+               "url": "https://hentai4daily.com/category/ht-audio-works-%e9%9f%b3%e5%a3%b0%e4%bd%9c%e5%93%81/"
+            }, {
+               "date_added": "13396808211814622",
+               "date_last_used": "13400172485677333",
+               "guid": "6237271c-41f0-46a5-af3b-103875e926a0",
+               "id": "251",
+               "meta_info": {
+                  "power_bookmark_meta": ""
+               },
+               "name": "EroVoice - Free Download Japanese ASMR, Binaural, EroGe, Visual Novel",
+               "type": "url",
+               "url": "http://e.erovoice.us/"
+            } ],
+            "date_added": "13395470718803038",
+            "date_last_used": "0",
+            "date_modified": "13397407086684517",
+            "guid": "f4f765df-4e83-4f70-8967-b41e37edfd18",
+            "id": "106",
+            "name": "A",
+            "type": "folder"
+         }, {
+            "date_added": "13400482598166911",
+            "date_last_used": "0",
+            "guid": "e2140afc-2438-407a-adfd-3cdf1d2db6ec",
+            "id": "381",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "【初心者向け勉強方法】HTMLとCSSの学習ロードマップ｜スタビジ",
+            "type": "url",
+            "url": "https://toukei-lab.com/html_css_study#1-2"
+         }, {
+            "date_added": "13400482607320183",
+            "date_last_used": "0",
+            "guid": "f8e77a68-403f-4240-ba3a-413967311a08",
+            "id": "382",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "HTML Tutorial",
+            "type": "url",
+            "url": "https://www.w3schools.com/html/default.asp"
+         }, {
+            "date_added": "13400482612926803",
+            "date_last_used": "0",
+            "guid": "d0174102-1566-4e1c-89d6-149280e5271c",
+            "id": "383",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "freeCodeCamp プログラミングチュートリアル: Python、JavaScript、Git など",
+            "type": "url",
+            "url": "https://www.freecodecamp.org/news/"
+         }, {
+            "date_added": "13400665205926558",
+            "date_last_used": "0",
+            "guid": "5cb57723-869d-4bb0-9170-b72d3b977fdc",
+            "id": "399",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "プログラミングのレッスン一覧 - プログラミングならドットインストール",
+            "type": "url",
+            "url": "https://dotinstall.com/lessons"
+         }, {
+            "date_added": "13401202165097303",
+            "date_last_used": "0",
+            "guid": "7e1275c8-4a10-430a-a63a-fe7791d30037",
+            "id": "418",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "ピアノコード一覧覚え方！ - YouTube",
+            "type": "url",
+            "url": "https://www.youtube.com/watch?v=7lNUdRAn3XM"
+         }, {
+            "date_added": "13401202169766360",
+            "date_last_used": "0",
+            "guid": "81788aca-ba20-4340-8698-0e6a78a3d640",
+            "id": "419",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "【初心者向け】かんたんコードの覚え方！コード演奏の第一歩。 - YouTube",
+            "type": "url",
+            "url": "https://www.youtube.com/watch?v=6I0MUIyPk8A"
+         }, {
+            "date_added": "13401202174017320",
+            "date_last_used": "0",
+            "guid": "f1a70c40-12a6-4c40-bccf-a7e4433a4d51",
+            "id": "420",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "【初心者でも分かる】ピアノでコードを弾く方法【超簡単】 - YouTube",
+            "type": "url",
+            "url": "https://www.youtube.com/watch?v=NBKdc1t-FOE"
+         }, {
+            "date_added": "13401785078959558",
+            "date_last_used": "0",
+            "guid": "f531ef1a-e45b-429a-b848-f94818d5cbdd",
+            "id": "430",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "ワークタイムシート - Google スプレッドシート",
+            "type": "url",
+            "url": "https://docs.google.com/spreadsheets/d/1OXCT1_YqPJHNBD8mdyfMlcTmFxt3VbJLBXrVq1NC8dE/edit?gid=0#gid=0"
+         }, {
+            "date_added": "13401785088472644",
+            "date_last_used": "0",
+            "guid": "b8790b54-485e-4153-ba29-f76c47e949ae",
+            "id": "431",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "ワークアウト - Google スプレッドシート",
+            "type": "url",
+            "url": "https://docs.google.com/spreadsheets/d/1wVQd45Tbf9uNyUrMtAajziSqPZ9X4Pv_dM2CKlHP_mQ/edit?gid=0#gid=0"
+         }, {
+            "children": [ {
+               "date_added": "13401954958183757",
+               "date_last_used": "0",
+               "guid": "936f49a7-63e2-4ed3-b75b-c378e6918f16",
+               "id": "448",
+               "name": "CodeTime - コーディング時間を追跡",
+               "type": "url",
+               "url": "https://codetime.dev/ja/dashboard"
+            }, {
+               "date_added": "13401954958183844",
+               "date_last_used": "0",
+               "guid": "d0d268ad-f531-4acb-9249-d12f067aa04b",
+               "id": "446",
+               "name": "テーマ設定方法",
+               "type": "url",
+               "url": "https://chatgpt.com/c/68c10539-e1fc-832d-aa92-28e1f25e0d39"
+            }, {
+               "date_added": "13401954958184042",
+               "date_last_used": "0",
+               "guid": "4bea7fc9-4305-4e68-b586-61746e61edce",
+               "id": "447",
+               "name": "HTML入門 基本タグ編 全動画一覧",
+               "type": "url",
+               "url": "file:///I:/Programming/PF/2025/8/Programming_Study/videos/%E2%91%A0Web%E3%82%B5%E3%82%A4%E3%83%88%E3%82%92%20%E4%BD%9C%E3%82%8C%E3%82%8B%E3%82%88%E3%81%86%E3%81%AB%E3%81%AA%E3%82%8D%E3%81%86/%E2%91%A2%E3%82%82%E3%81%A3%E3%81%A8%E8%A9%B3%E3%81%97%E3%81%8FHTMLCSS%E3%82%92%E5%AD%A6%E3%82%93%E3%81%A7%E3%81%BF%E3%82%88%E3%81%86/%E2%91%A0HTML%E5%85%A5%E9%96%80%20%E5%9F%BA%E6%9C%AC%E3%82%BF%E3%82%B0%E7%B7%A8/index.html"
+            } ],
+            "date_added": "13401954958183588",
+            "date_last_used": "0",
+            "date_modified": "13401954958184042",
+            "guid": "2b79d4c2-57ec-4fd0-a451-f910e2ff952f",
+            "id": "445",
+            "name": "新しいフォルダ",
+            "type": "folder"
+         }, {
+            "date_added": "13401992809754975",
+            "date_last_used": "0",
+            "guid": "f4d0a17c-e2ac-4023-9adf-6f586f381e4c",
+            "id": "457",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "漫画raw (anigenavi) - 漫画好きのための完全無料読書空間",
+            "type": "url",
+            "url": "https://anigenavi.blog/"
+         }, {
+            "date_added": "13402054524698221",
+            "date_last_used": "0",
+            "guid": "3fa9206f-367a-4e89-8692-fe8086d4d007",
+            "id": "460",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "Manga Library",
+            "type": "url",
+            "url": "http://192.168.0.110:8000/"
+         }, {
+            "date_added": "13402139679685097",
+            "date_last_used": "0",
+            "guid": "426395b0-8ae4-4a68-926b-0822b4a17834",
+            "id": "461",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "中学英語をひとつひとつわかりやすく",
+            "type": "url",
+            "url": "file:///D:/study/%E4%B8%AD%E5%AD%A6%E8%8B%B1%E8%AA%9E%E3%82%92%E3%81%B2%E3%81%A8%E3%81%A4%E3%81%B2%E3%81%A8%E3%81%A4%E3%82%8F%E3%81%8B%E3%82%8A%E3%82%84%E3%81%99%E3%81%8F%20(1).pdf"
+         }, {
+            "date_added": "13402149840573028",
+            "date_last_used": "0",
+            "guid": "ae5ce373-42df-47ce-a4cd-4771fd1a2384",
+            "id": "462",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "商業誌 - エロ漫画 momon:GA（モモンガッ!!）",
+            "type": "url",
+            "url": "https://momon-ga.com/magazine/page/4/"
+         }, {
+            "date_added": "13402486140821378",
+            "date_last_used": "0",
+            "guid": "a97788be-29b4-469a-99fc-eb40232f709a",
+            "id": "475",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "無料大容量 ファイル転送サービス GigaFile(ギガファイル)便",
+            "type": "url",
+            "url": "https://25.gigafile.nu/0921-p1b08222f3e24e2f337640af533c8e125"
+         }, {
+            "date_added": "13402493086755766",
+            "date_last_used": "0",
+            "guid": "d65aceac-aaea-4b99-b116-2765df013ffa",
+            "id": "474",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "(1) 【甘々】どうしてもかまってほしい彼女はあの手この手で気を引こうとするがなかなか振り向いてもらえないので最終手段に出たようです。【男性向けシチュエーションボイス】cv.ふじかわあや乃 - YouTube",
+            "type": "url",
+            "url": "https://www.youtube.com/watch?v=zDv8Hll82EI"
+         }, {
+            "date_added": "13402493089500266",
+            "date_last_used": "0",
+            "guid": "fd33bd69-4dad-4e67-a628-198269eed59a",
+            "id": "476",
+            "meta_info": {
+               "power_bookmark_meta": ""
+            },
+            "name": "(1) 【切なく】アンコールダンス/赫ノ白亞【歌ってみた】 - YouTube",
+            "type": "url",
+            "url": "https://www.youtube.com/watch?v=BfHQECKpJcA"
+         } ],
+         "date_added": "13395419398152665",
+         "date_last_used": "0",
+         "date_modified": "13402493313351838",
+         "guid": "0bc5d13f-2cba-5d74-951f-3f233fe6c908",
+         "id": "1",
+         "name": "ブックマーク バー",
+         "type": "folder"
+      },
+      "other": {
+         "children": [ {
+            "children": [ {
+               "date_added": "13400487247840553",
+               "date_last_used": "0",
+               "guid": "75de4cea-1e20-46f7-81c7-f72d16d8dc34",
+               "id": "387",
+               "meta_info": {
+                  "power_bookmark_meta": "CmoKaGh0dHBzOi8vZW5jcnlwdGVkLXRibjMuZ3N0YXRpYy5jb20vaW1hZ2VzP3E9dGJuOkFOZDlHY1J0OVBZVzJNbnRMbnVLd25kcklWc2xUYmI5OHNwcWNoNnQxakN2by1nWENWSThWdU94MtABCqgBV2Vi5Yi25L2c6ICF44Gu44Gf44KB44GuU2Fzc+OBruaVmeenkeabuCDmlLnoqIIz54mIIFdlYuODh+OCtuOCpOODs+OBruePvuWgtOOBp+W/hemgiOOBrkNTU+ODl+ODquODl+ODreOCu+ODg+OCtSBXZWLliLbkvZzogIXjga7jgZ/jgoHjga7mlZnnp5Hmm7jjgrfjg6rjg7zjgrogS2luZGxl54mIGgsKA0pQWRDA/Mr6CSD88NOVranqwJgBMQnZAI3kokwAOgJKUA=="
+               },
+               "name": "Amazon.co.jp: Web制作者のためのSassの教科書 改訂3版 Webデザインの現場で必須のCSSプリプロセッサ Web制作者のための教科書シリーズ eBook : 平澤隆（Latele）, 森田壮: Kindleストア",
+               "type": "url",
+               "url": "https://www.amazon.co.jp/Web%E5%88%B6%E4%BD%9C%E8%80%85%E3%81%AE%E3%81%9F%E3%82%81%E3%81%AESass%E3%81%AE%E6%95%99%E7%A7%91%E6%9B%B8-%E6%94%B9%E8%A8%823%E7%89%88-Web%E3%83%87%E3%82%B6%E3%82%A4%E3%83%B3%E3%81%AE%E7%8F%BE%E5%A0%B4%E3%81%A7%E5%BF%85%E9%A0%88%E3%81%AECSS%E3%83%97%E3%83%AA%E3%83%97%E3%83%AD%E3%82%BB%E3%83%83%E3%82%B5-Web%E5%88%B6%E4%BD%9C%E8%80%85%E3%81%AE%E3%81%9F%E3%82%81%E3%81%AE%E6%95%99%E7%A7%91%E6%9B%B8%E3%82%B7%E3%83%AA%E3%83%BC%E3%82%BA-%E5%B9%B3%E6%BE%A4%E9%9A%86%EF%BC%88Latele%EF%BC%89-ebook/dp/B0DPNRSG4C/ref=tmm_kin_swatch_0?_encoding=UTF8&dib_tag=se&dib=eyJ2IjoiMSJ9.5jYbS1xCS8xYeJmZ8uie-6l4Cnuc_ML8_rnOg1MkYSYJV_wigpGhcZss5ohCagLzAq5MN68SVVlaearYp2OhgAzo_AH429auFD0ey53VmZYSqJH3KyLm4FLrMrY4ntDJ0eIxZAHOCBJXnJNxqNqVXSs1yhni5gdv15df6r-hjJ1TPix3-_P_i_MCRToMn5hJx0a7Kjiw8rcgddqmKReN1828z5hFG8eo9UbAGp5jHvqYDHLvsrUygLOnlFva6QAcq4ZqlkKRF6HrWVSgLNPP_ijIRDlrNal7kL5_VeIAZ-0.9rdDmD5Gg1bwxNHfeWvc6UYps1CVPLFXbMLBMkrZIBk&qid=1756013354&sr=8-1"
+            } ],
+            "date_added": "13400487247840413",
+            "date_last_used": "0",
+            "date_modified": "13400487247840553",
+            "guid": "89fc5b66-beb6-56c1-a99b-70635d7df201",
+            "id": "386",
+            "meta_info": {
+               "was_folder_suggested": "false"
+            },
+            "name": "ショッピング リスト",
+            "type": "folder"
+         } ],
+         "date_added": "13395419398152671",
+         "date_last_used": "0",
+         "date_modified": "13395421902996372",
+         "guid": "82b081ec-3dd3-529c-8475-ab6c344590dd",
+         "id": "2",
+         "name": "その他のブックマーク",
+         "type": "folder"
+      },
+      "synced": {
+         "children": [  ],
+         "date_added": "13395419398152672",
+         "date_last_used": "0",
+         "date_modified": "13398322609806439",
+         "guid": "4cf2e351-0e85-532b-bb37-df045d8f8d0f",
+         "id": "3",
+         "name": "モバイルのブックマーク",
+         "type": "folder"
+      }
+   },
+   "version": 1
+}
