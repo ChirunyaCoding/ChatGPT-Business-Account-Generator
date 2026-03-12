@@ -9,11 +9,14 @@ function isUnknownInteractionError(error) {
     }
 
     const code = error.code ?? error.rawError?.code;
-    if (code === 10062) {
+    if (code === 10062 || code === 50027) {
         return true;
     }
 
-    return typeof error.message === 'string' && error.message.includes('Unknown interaction');
+    return typeof error.message === 'string' && (
+        error.message.includes('Unknown interaction') ||
+        error.message.includes('Invalid Webhook Token')
+    );
 }
 
 function isAlreadyAcknowledgedInteractionError(error) {
@@ -57,7 +60,7 @@ async function safeEditReply(interaction, payload) {
         return true;
     } catch (error) {
         if (isUnknownInteractionError(error)) {
-            console.warn('⚠️ 期限切れのInteractionのためeditReplyをスキップしました (10062)');
+            console.warn('⚠️ 期限切れまたは無効化されたInteractionのためeditReplyをスキップしました');
             return false;
         }
         throw error;

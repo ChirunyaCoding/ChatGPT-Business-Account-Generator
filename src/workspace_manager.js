@@ -12,6 +12,10 @@ const MENU_FILE = path.join(DATA_DIR, 'menus.json');
 const TICKET_FILE = path.join(DATA_DIR, 'tickets.json');
 const ACCOUNTS_FILE = path.join(__dirname, '..', '.workspace_accounts.json');
 
+function saveAccounts(config) {
+    fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(config, null, 2));
+}
+
 // アカウント設定読み込み
 function loadAccounts() {
     try {
@@ -52,7 +56,7 @@ function addAccount(name, email, password) {
         config.default_account = name;
     }
     
-    fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(config, null, 2));
+    saveAccounts(config);
     return { name, email, password };
 }
 
@@ -69,8 +73,57 @@ function removeAccount(name) {
         config.default_account = config.accounts[0].name;
     }
     
-    fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(config, null, 2));
+    saveAccounts(config);
     return removed;
+}
+
+function createGeneratedAccountName(existingAccounts, prefix = 'generated-account') {
+    const baseStamp = new Date().toISOString()
+        .replace(/[-:]/g, '')
+        .replace(/\.\d+Z$/, 'Z')
+        .replace('T', '-');
+
+    let suffix = 1;
+    let candidate = `${prefix}-${baseStamp}`;
+
+    while (existingAccounts.some((account) => account.name === candidate)) {
+        suffix += 1;
+        candidate = `${prefix}-${baseStamp}-${suffix}`;
+    }
+
+    return candidate;
+}
+
+function saveCreatedAccounts(entries = [], options = {}) {
+    if (!Array.isArray(entries) || entries.length === 0) {
+        return [];
+    }
+
+    const config = loadAccounts();
+    const savedAccounts = [];
+    const prefix = options.prefix || 'generated-account';
+
+    for (const entry of entries) {
+        const name = createGeneratedAccountName(config.accounts, prefix);
+        const account = {
+            name,
+            email: entry.email,
+            password: entry.password,
+            createdAt: entry.createdAt || new Date().toISOString(),
+            source: entry.source || 'create-account',
+            browser: entry.browser || null
+        };
+
+        config.accounts.push(account);
+        savedAccounts.push(account);
+    }
+
+    if (!config.default_account && config.accounts.length > 0) {
+        config.default_account = config.accounts[0].name;
+    }
+
+    saveAccounts(config);
+    return savedAccounts;
 }
 
 // データディレクトリ初期化
@@ -501,8 +554,11 @@ module.exports = {
     
     // Accounts
     loadAccounts,
+    saveAccounts,
     getAccount,
     getAllAccounts,
     addAccount,
-    removeAccount
+    removeAccount,
+    saveCreatedAccounts,
+    createGeneratedAccountName
 };

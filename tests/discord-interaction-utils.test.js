@@ -22,6 +22,7 @@ test('isUnknownInteractionError: code 10062 を検知できる', () => {
     assert.equal(isUnknownInteractionError({ code: 10062 }), true);
     assert.equal(isUnknownInteractionError({ rawError: { code: 10062 } }), true);
     assert.equal(isUnknownInteractionError({ message: 'Unknown interaction' }), true);
+    assert.equal(isUnknownInteractionError({ code: 50027, message: 'Invalid Webhook Token' }), true);
 });
 
 test('isAlreadyAcknowledgedInteractionError: code 40060 を検知できる', () => {
@@ -79,6 +80,17 @@ test('safeEditReply: 10062 は例外化せず false を返す（回帰テスト�
     const interaction = {
         editReply: async () => {
             throw { rawError: { code: 10062 } };
+        }
+    };
+
+    const result = await withMutedConsoleWarn(() => safeEditReply(interaction, { embeds: [] }));
+    assert.equal(result, false);
+});
+
+test('safeEditReply: 50027 も例外化せず false を返す（回帰テスト）', async () => {
+    const interaction = {
+        editReply: async () => {
+            throw { rawError: { code: 50027 }, message: 'Invalid Webhook Token' };
         }
     };
 

@@ -3,17 +3,52 @@ venv/
 __pycache__/
 .pytest_cache/
 tests/__pycache__/
-
+**/__pycache__/
+**/.pytest_cache/
+*.py[cod]
+*.pyo
+*.tmp
+*.temp
+*.pid
+*.log
+.cache/
+.mypy_cache/
+.ruff_cache/
+.eslintcache
+.parcel-cache/
+docs/
+docs/specs/
 # Local History (contains sensitive data)
 .lh/
-
-# Chrome user data
+tests/
+# Browser user data / generated profiles
+.chrome_profile_real/
+.chrome_real_profile_copy/
 .chrome_user_data/
 .invite_profile/
 .paypal_user_data/
+src/.chrome_real_profile_copy/
+src/delete/
+backups/
 
 # Browser storage state
 .browser_storage_state.json
+
+# Browser caches
+**/Cache/
+**/Cache_Data/
+**/Code Cache/
+**/GPUCache/
+**/GrShaderCache/
+**/GraphiteDawnCache/
+**/ShaderCache/
+**/DawnGraphiteCache/
+**/DawnWebGPUCache/
+**/AutofillAiModelCache/
+**/component_crx_cache/
+**/extensions_crx_cache/
+**/ScriptCache/
+**/Shared Dictionary/cache/
 
 # Screenshots (auto-generated)
 screenshots/

@@ -1,17 +1,993 @@
 /**
- * Puppeteer Unified - ChatGPTアカウント作成 (Firefox/Chrome自動切り替え)
+ * Puppeteer Unified - ChatGPTアカウント作成 (Chrome実ブラウザ)
  * https://chatgpt.com/auth/login から開始
  */
 
 const puppeteer = require('puppeteer');
-const fs = require('fs');
+const {
+    containsUnsupportedEmailError,
+    createRetryableSignupError,
+    formatTimeoutLimitLabel,
+    getCreateAccountTimingProfile,
+    isTransientNavigationError,
+    isUnlimitedTimeoutMs,
+    resolveCreateAccountKeepOpen,
+    scaleCreateAccountDelay,
+    shouldRetrySignupAttempt,
+    withExecutionContextRetry
+} = require('./utils/create-account-runtime');
+const {
+    createGeneratorFallbackEmail,
+    extractGeneratorEmailAddress,
+    extractGeneratorVerificationCode
+} = require('./utils/generator-email');
+const {
+    BUSINESS_SIGNUP_CTA_TEXTS,
+    BUSINESS_SIGNUP_CODE_SELECTORS,
+    BUSINESS_SIGNUP_COOKIE_TEXTS,
+    BUSINESS_SIGNUP_DIRECT_URL,
+    BUSINESS_SIGNUP_EMAIL_SELECTORS,
+    BUSINESS_SIGNUP_PASSWORD_LINK_SELECTORS,
+    BUSINESS_SIGNUP_PASSWORD_SELECTORS,
+    classifyBusinessSignupEntryState,
+    classifyEmailNextStepState,
+    isPasswordStepState
+} = require('./utils/business-signup');
+const {
+    detectBrowserPaths,
+    getChromeOnlyBrowserCandidates,
+    launchRealBrowser
+} = require('./utils/real-browser-launch');
+
+const CREATE_ACCOUNT_TIMING = getCreateAccountTimingProfile();
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function randomDelay(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
+    const scaled = scaleCreateAccountDelay(min, max, {
+        delayScale: CREATE_ACCOUNT_TIMING.delayScale
+    });
+    return Math.floor(Math.random() * (scaled.max - scaled.min + 1)) + scaled.min;
+}
+
+function normalizeText(value = '') {
+    return value.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+async function gotoWithRetry(page, url, options) {
+    const maxAttempts = 4;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            return await withExecutionContextRetry(() => page.goto(url, options), {
+                retries: 2,
+                delayMs: 800
+            });
+        } catch (error) {
+            lastError = error;
+
+            if (!isTransientNavigationError(error) || attempt === maxAttempts) {
+                break;
+            }
+
+            const waitMs = 1200 * attempt;
+            console.log(`   ⚠️ 一時的な通信エラーを検出したため再試行します (${attempt}/${maxAttempts - 1})`);
+            await page.goto('about:blank', {
+                waitUntil: 'domcontentloaded',
+                timeout: CREATE_ACCOUNT_TIMING.aboutBlankTimeoutMs
+            }).catch(() => null);
+            await sleep(waitMs);
+        }
+    }
+
+    if (isTransientNavigationError(lastError)) {
+        throw createRetryableSignupError(
+            `一時的な通信エラーのため再試行します: ${lastError.message}`,
+            'TRANSIENT_NAVIGATION'
+        );
+    }
+
+    throw lastError;
+}
+
+async function evaluateWithRetry(page, pageFunction, ...args) {
+    return withExecutionContextRetry(() => page.evaluate(pageFunction, ...args), {
+        retries: 2,
+        delayMs: 500
+    });
+}
+
+async function hasAnySelector(page, selectors) {
+    return withExecutionContextRetry(async () => {
+        return evaluateWithRetry(page, (candidates) => {
+            const isVisible = (element) => {
+                if (!element) {
+                    return false;
+                }
+
+                const style = window.getComputedStyle(element);
+                return style.display !== 'none' &&
+                    style.visibility !== 'hidden' &&
+                    element.getClientRects().length > 0;
+            };
+
+            return candidates.some((selector) => {
+                const element = document.querySelector(selector);
+                return isVisible(element);
+            });
+        }, selectors);
+    }, {
+        retries: 2,
+        delayMs: 500
+    });
+}
+
+async function findFirstVisibleSelector(page, selectors) {
+    return withExecutionContextRetry(async () => {
+        return evaluateWithRetry(page, (candidates) => {
+            const isVisible = (element) => {
+                if (!element) {
+                    return false;
+                }
+
+                const style = window.getComputedStyle(element);
+                return style.display !== 'none' &&
+                    style.visibility !== 'hidden' &&
+                    element.getClientRects().length > 0;
+            };
+
+            for (const selector of candidates) {
+                const element = document.querySelector(selector);
+                if (isVisible(element)) {
+                    return selector;
+                }
+            }
+
+            return null;
+        }, selectors);
+    }, {
+        retries: 2,
+        delayMs: 500
+    });
+}
+
+async function waitForAnyVisibleSelector(page, selectors, timeout = CREATE_ACCOUNT_TIMING.selectorTimeoutMs, diagnosticsLabel = '入力欄') {
+    const start = Date.now();
+
+    while (Date.now() - start < timeout) {
+        const selector = await findFirstVisibleSelector(page, selectors);
+        if (selector) {
+            return selector;
+        }
+
+        await sleep(300);
+    }
+
+    const diagnostics = await evaluateWithRetry(page, () => {
+        return Array.from(document.querySelectorAll('input, button, a')).slice(0, 50).map((element) => ({
+            tag: element.tagName.toLowerCase(),
+            type: element.getAttribute('type'),
+            name: element.getAttribute('name'),
+            id: element.id,
+            placeholder: element.getAttribute('placeholder'),
+            text: (element.textContent || '').trim()
+        }));
+    }).catch(() => []);
+
+    throw new Error(`${diagnosticsLabel}が見つかりません (URL: ${page.url()}) elements: ${JSON.stringify(diagnostics)}`);
+}
+
+async function getBusinessSignupEntrySnapshot(page) {
+    const snapshot = await evaluateWithRetry(page, (emailSelectors, cookieTexts) => {
+        const isVisible = (element) => {
+            if (!element) {
+                return false;
+            }
+
+            const style = window.getComputedStyle(element);
+            return style.display !== 'none' &&
+                style.visibility !== 'hidden' &&
+                element.getClientRects().length > 0;
+        };
+
+        const buttonTexts = Array.from(document.querySelectorAll('button, a'))
+            .filter((element) => isVisible(element))
+            .map((element) => [
+                element.textContent || '',
+                element.getAttribute('aria-label') || '',
+                element.getAttribute('data-dd-action-name') || ''
+            ].join(' ').trim())
+            .filter(Boolean);
+
+        const pageText = document.body?.innerText || '';
+        const hasEmailField = emailSelectors.some((selector) => {
+            const element = document.querySelector(selector);
+            return isVisible(element);
+        });
+        const hasChatShellComposer = Boolean(
+            document.querySelector('#composer-plus-btn') ||
+            document.querySelector('#upload-photos') ||
+            document.querySelector('#upload-camera')
+        );
+        const hasCookieBanner = cookieTexts.some((candidate) =>
+            pageText.includes(candidate)
+        );
+
+        return {
+            hasEmailField,
+            buttonTexts,
+            pageText,
+            url: window.location.href,
+            hasChatShellComposer,
+            hasCookieBanner
+        };
+    }, BUSINESS_SIGNUP_EMAIL_SELECTORS, BUSINESS_SIGNUP_COOKIE_TEXTS).catch(() => ({
+        hasEmailField: false,
+        buttonTexts: [],
+        pageText: '',
+        url: page.url(),
+        hasChatShellComposer: false,
+        hasCookieBanner: false
+    }));
+
+    return {
+        hasEmailField: snapshot.hasEmailField,
+        buttonTexts: snapshot.buttonTexts,
+        text: snapshot.pageText,
+        url: snapshot.url,
+        hasChatShellComposer: snapshot.hasChatShellComposer,
+        hasCookieBanner: snapshot.hasCookieBanner,
+        state: classifyBusinessSignupEntryState({
+            url: snapshot.url,
+            text: snapshot.pageText,
+            hasEmailField: snapshot.hasEmailField,
+            buttonTexts: snapshot.buttonTexts,
+            hasChatShellComposer: snapshot.hasChatShellComposer,
+            hasCookieBanner: snapshot.hasCookieBanner
+        })
+    };
+}
+
+async function waitForBusinessSignupEntryState(page, timeout = CREATE_ACCOUNT_TIMING.entryStateTimeoutMs) {
+    const start = Date.now();
+    let lastSnapshot = {
+        hasEmailField: false,
+        buttonTexts: [],
+        state: 'unknown'
+    };
+
+    while (Date.now() - start < timeout) {
+        lastSnapshot = await getBusinessSignupEntrySnapshot(page);
+        if (lastSnapshot.state !== 'unknown') {
+            return lastSnapshot;
+        }
+
+        await sleep(500);
+    }
+
+    return lastSnapshot;
+}
+
+async function dismissCookieBannerIfPresent(page) {
+    const buttonSelector = 'button, a';
+    const rejectTexts = [
+        '必須項目以外を拒否する',
+        'reject non-essential',
+        'reject all'
+    ];
+    const acceptTexts = [
+        'すべて受け入れる',
+        'accept all'
+    ];
+
+    const rejected = await clickElementByText(page, buttonSelector, rejectTexts).catch(() => false);
+    if (rejected) {
+        console.log('   Cookieバナーを拒否しました');
+        await sleep(CREATE_ACCOUNT_TIMING.shortDelayMs);
+        return true;
+    }
+
+    const accepted = await clickElementByText(page, buttonSelector, acceptTexts).catch(() => false);
+    if (accepted) {
+        console.log('   Cookieバナーを閉じました');
+        await sleep(CREATE_ACCOUNT_TIMING.shortDelayMs);
+        return true;
+    }
+
+    return false;
+}
+
+async function clearOpenAIAuthState(page) {
+    const session = await page.target().createCDPSession().catch(() => null);
+    if (!session) {
+        return 0;
+    }
+
+    let clearedOrigins = 0;
+
+    try {
+        const origins = [
+            'https://chatgpt.com',
+            'https://auth.openai.com',
+            'https://openai.com'
+        ];
+
+        for (const origin of origins) {
+            try {
+                await session.send('Storage.clearDataForOrigin', {
+                    origin,
+                    storageTypes: 'all'
+                });
+                clearedOrigins += 1;
+            } catch (error) {
+                // origin 単位の削除失敗は無視する
+            }
+        }
+    } finally {
+        await session.detach().catch(() => null);
+    }
+
+    if (clearedOrigins > 0) {
+        console.log('   🧼 ChatGPT関連セッションを初期化しました');
+    }
+
+    return clearedOrigins;
+}
+
+async function prepareBusinessSignupEmailEntry(page) {
+    let lastSnapshot = null;
+    const recoveryUrls = [BUSINESS_SIGNUP_DIRECT_URL, BUSINESS_SIGNUP_DIRECT_URL];
+
+    for (let attempt = 0; attempt < recoveryUrls.length + 1; attempt++) {
+        lastSnapshot = await waitForBusinessSignupEntryState(
+            page,
+            attempt === 0
+                ? CREATE_ACCOUNT_TIMING.entryStateTimeoutMs
+                : CREATE_ACCOUNT_TIMING.retryEntryStateTimeoutMs
+        );
+
+        if (lastSnapshot.state === 'cookie') {
+            const dismissed = await dismissCookieBannerIfPresent(page);
+            if (dismissed) {
+                continue;
+            }
+        }
+
+        if (lastSnapshot.state === 'email') {
+            console.log('   メール入力欄が既に表示されているため、CTAクリックをスキップします');
+            return lastSnapshot;
+        }
+
+        if (lastSnapshot.state === 'cta') {
+            const signupClicked = await clickElementByText(
+                page,
+                'button, a',
+                BUSINESS_SIGNUP_CTA_TEXTS,
+                { waitForNavigation: true, navigationTimeout: CREATE_ACCOUNT_TIMING.navigationShortTimeoutMs }
+            );
+
+            if (signupClicked) {
+                console.log('   ボタンをクリックしました');
+                await sleep(randomDelay(4000, 6000));
+                continue;
+            }
+        }
+
+        if (attempt >= recoveryUrls.length) {
+            break;
+        }
+
+        console.log(`   ⚠️ チーム登録フォームを再取得します (${attempt + 1}/${recoveryUrls.length})`);
+        await clearOpenAIAuthState(page);
+        await gotoWithRetry(page, recoveryUrls[attempt], {
+            waitUntil: 'domcontentloaded',
+            timeout: CREATE_ACCOUNT_TIMING.navigationTimeoutMs
+        });
+        await sleep(randomDelay(2200, 3200));
+    }
+
+    throw new Error(
+        `チーム登録フォームに到達できません ` +
+        `(state: ${lastSnapshot?.state || 'unknown'}, url: ${lastSnapshot?.url || page.url()}, buttons: ${JSON.stringify((lastSnapshot?.buttonTexts || []).slice(0, 10))})`
+    );
+}
+
+async function clickElementByText(page, selector, textCandidates, options = {}) {
+    const waitForNavigation = options.waitForNavigation ?? false;
+    const navigationTimeout = options.navigationTimeout ?? CREATE_ACCOUNT_TIMING.navigationShortTimeoutMs;
+    const normalizedCandidates = textCandidates.map((candidate) => normalizeText(candidate));
+
+    return withExecutionContextRetry(async () => {
+        const hasTarget = await evaluateWithRetry(page, (candidateSelector, candidates) => {
+            const normalize = (value = '') => String(value).replace(/\s+/g, ' ').trim().toLowerCase();
+            const isVisible = (element) => {
+                if (!element) {
+                    return false;
+                }
+
+                const style = window.getComputedStyle(element);
+                return style.display !== 'none' &&
+                    style.visibility !== 'hidden' &&
+                    element.getClientRects().length > 0;
+            };
+
+            const target = Array.from(document.querySelectorAll(candidateSelector)).find((element) => {
+                if (!isVisible(element)) {
+                    return false;
+                }
+
+                const text = normalize([
+                    element.textContent || '',
+                    element.getAttribute('aria-label') || '',
+                    element.getAttribute('data-dd-action-name') || ''
+                ].join(' '));
+
+                return candidates.some((candidate) => text.includes(candidate));
+            });
+
+            return Boolean(target);
+        }, selector, normalizedCandidates);
+
+        if (!hasTarget) {
+            return false;
+        }
+
+        const navigationPromise = waitForNavigation
+            ? page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: navigationTimeout }).catch(() => null)
+            : null;
+
+        await evaluateWithRetry(page, (candidateSelector, candidates) => {
+            const normalize = (value = '') => String(value).replace(/\s+/g, ' ').trim().toLowerCase();
+            const isVisible = (element) => {
+                if (!element) {
+                    return false;
+                }
+
+                const style = window.getComputedStyle(element);
+                return style.display !== 'none' &&
+                    style.visibility !== 'hidden' &&
+                    element.getClientRects().length > 0;
+            };
+
+            const target = Array.from(document.querySelectorAll(candidateSelector)).find((element) => {
+                if (!isVisible(element)) {
+                    return false;
+                }
+
+                const text = normalize([
+                    element.textContent || '',
+                    element.getAttribute('aria-label') || '',
+                    element.getAttribute('data-dd-action-name') || ''
+                ].join(' '));
+
+                return candidates.some((candidate) => text.includes(candidate));
+            });
+
+            if (!target) {
+                return false;
+            }
+
+            target.scrollIntoView({ block: 'center', inline: 'center' });
+            target.click();
+            return true;
+        }, selector, normalizedCandidates);
+
+        if (navigationPromise) {
+            await navigationPromise;
+        }
+
+        return true;
+    }, {
+        retries: 2,
+        delayMs: 500
+    });
+}
+
+async function clickSubmitButton(page, options = {}) {
+    const waitForNavigation = options.waitForNavigation ?? false;
+    const navigationTimeout = options.navigationTimeout ?? CREATE_ACCOUNT_TIMING.navigationShortTimeoutMs;
+    const selectors = [
+        'button[type="submit"]',
+        'button[data-testid="continue-button"]'
+    ];
+
+    return withExecutionContextRetry(async () => {
+        for (const selector of selectors) {
+            const clicked = await clickFirstMatchingSelector(page, [selector], {
+                waitForNavigation,
+                navigationTimeout
+            });
+            if (clicked) {
+                return true;
+            }
+        }
+
+        return false;
+    }, {
+        retries: 2,
+        delayMs: 500
+    });
+}
+
+async function clickFirstMatchingSelector(page, selectors, options = {}) {
+    const waitForNavigation = options.waitForNavigation ?? false;
+    const navigationTimeout = options.navigationTimeout ?? CREATE_ACCOUNT_TIMING.navigationShortTimeoutMs;
+
+    return withExecutionContextRetry(async () => {
+        for (const selector of selectors) {
+            const hasTarget = await evaluateWithRetry(page, (candidateSelector) => {
+                const element = document.querySelector(candidateSelector);
+                if (!element) {
+                    return false;
+                }
+
+                const style = window.getComputedStyle(element);
+                if (style.display === 'none' || style.visibility === 'hidden' || element.getClientRects().length === 0) {
+                    return false;
+                }
+
+                return true;
+            }, selector);
+
+            if (!hasTarget) {
+                continue;
+            }
+
+            const navigationPromise = waitForNavigation
+                ? page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: navigationTimeout }).catch(() => null)
+                : null;
+
+            await evaluateWithRetry(page, (candidateSelector) => {
+                const element = document.querySelector(candidateSelector);
+                if (!element) {
+                    return false;
+                }
+
+                const style = window.getComputedStyle(element);
+                if (style.display === 'none' || style.visibility === 'hidden' || element.getClientRects().length === 0) {
+                    return false;
+                }
+
+                element.scrollIntoView({ block: 'center', inline: 'center' });
+                element.click();
+                return true;
+            }, selector);
+
+            if (navigationPromise) {
+                await navigationPromise;
+            }
+
+            return true;
+        }
+
+        return false;
+    }, {
+        retries: 2,
+        delayMs: 500
+    });
+}
+
+async function fillInputValue(page, selector, value) {
+    await withExecutionContextRetry(async () => {
+        await evaluateWithRetry(page, (candidateSelector) => {
+            const element = document.querySelector(candidateSelector);
+            if (!element) {
+                throw new Error(`入力対象が見つかりません: ${candidateSelector}`);
+            }
+
+            element.scrollIntoView({ block: 'center', inline: 'center' });
+            element.focus();
+            if ('value' in element) {
+                element.value = '';
+            }
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+        }, selector);
+
+        await page.click(selector, { clickCount: 3 }).catch(() => null);
+        await sleep(150);
+        await page.keyboard.press('Control+A').catch(() => null);
+        await page.keyboard.press('Meta+A').catch(() => null);
+        await page.keyboard.press('Backspace').catch(() => null);
+        await sleep(100);
+        await page.type(selector, value, { delay: 0 });
+
+        let currentValue = await evaluateWithRetry(page, (candidateSelector) => {
+            const element = document.querySelector(candidateSelector);
+            return element ? (element.value || '') : null;
+        }, selector);
+
+        if (currentValue !== value) {
+            await evaluateWithRetry(page, (candidateSelector, nextValue) => {
+                const element = document.querySelector(candidateSelector);
+                if (!element) {
+                    return false;
+                }
+
+                element.focus();
+                element.value = nextValue;
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+            }, selector, value);
+
+            currentValue = await evaluateWithRetry(page, (candidateSelector) => {
+                const element = document.querySelector(candidateSelector);
+                return element ? (element.value || '') : null;
+            }, selector);
+        }
+
+        if (currentValue !== value) {
+            throw new Error(`入力値の反映に失敗しました: expected=${value} actual=${currentValue}`);
+        }
+    }, {
+        retries: 2,
+        delayMs: 500
+    });
+}
+
+async function getPageTextSnapshot(page) {
+    return evaluateWithRetry(page, () => document.body?.innerText || '').catch(() => '');
+}
+
+async function throwIfUnsupportedEmailError(page) {
+    const pageText = await getPageTextSnapshot(page);
+    if (!containsUnsupportedEmailError(pageText)) {
+        return;
+    }
+
+    await clickElementByText(page, 'button', ['もう一度試す', 'try again']).catch(() => false);
+    await sleep(1500);
+
+    throw createRetryableSignupError(
+        'The email you provided is not supported. 新しいメールで最初から再試行します。',
+        'UNSUPPORTED_EMAIL'
+    );
+}
+
+async function waitForPasswordStep(page, timeout = CREATE_ACCOUNT_TIMING.nextStepTimeoutMs) {
+    const start = Date.now();
+
+    while (Date.now() - start < timeout) {
+        const hasPasswordField = await hasAnySelector(page, BUSINESS_SIGNUP_PASSWORD_SELECTORS);
+        const pageText = await getPageTextSnapshot(page);
+        const currentUrl = page.url();
+
+        if (isPasswordStepState({
+            url: currentUrl,
+            text: pageText,
+            hasPasswordField
+        })) {
+            return true;
+        }
+
+        await sleep(500);
+    }
+
+    return false;
+}
+
+async function waitForEmailNextStep(page, timeout = CREATE_ACCOUNT_TIMING.nextStepTimeoutMs) {
+    const start = Date.now();
+
+    while (Date.now() - start < timeout) {
+        const hasPasswordField = await hasAnySelector(page, BUSINESS_SIGNUP_PASSWORD_SELECTORS);
+        const hasPasswordLink = await hasAnySelector(page, BUSINESS_SIGNUP_PASSWORD_LINK_SELECTORS);
+        const hasCodeField = await hasAnySelector(page, BUSINESS_SIGNUP_CODE_SELECTORS);
+        const pageText = await getPageTextSnapshot(page);
+        const currentUrl = page.url();
+        const state = classifyEmailNextStepState({
+            url: currentUrl,
+            text: pageText,
+            hasPasswordField,
+            hasPasswordLink,
+            hasCodeField
+        });
+
+        if (state !== 'unknown') {
+            return state;
+        }
+
+        await sleep(500);
+    }
+
+    return 'unknown';
+}
+
+async function waitForPasswordInput(page, timeout = CREATE_ACCOUNT_TIMING.inputTimeoutMs) {
+    return waitForAnyVisibleSelector(
+        page,
+        BUSINESS_SIGNUP_PASSWORD_SELECTORS,
+        timeout,
+        'パスワード入力欄'
+    );
+}
+
+async function waitForCodeInput(page, timeout = CREATE_ACCOUNT_TIMING.inputTimeoutMs) {
+    return waitForAnyVisibleSelector(
+        page,
+        BUSINESS_SIGNUP_CODE_SELECTORS,
+        timeout,
+        '検証コード入力欄'
+    );
+}
+
+async function fillEmailStep(page, email, label = `メール入力完了: ${email}`) {
+    const emailSelector = await waitForAnyVisibleSelector(
+        page,
+        BUSINESS_SIGNUP_EMAIL_SELECTORS,
+        CREATE_ACCOUNT_TIMING.selectorTimeoutMs,
+        'メール入力欄'
+    );
+
+    await fillInputValue(page, emailSelector, email);
+    console.log(`   ${label}`);
+    await sleep(randomDelay(500, 1000));
+}
+
+async function fillNameStep(page, fullName, label = `名前入力完了: ${fullName}`) {
+    const nameSelector = await waitForAnyVisibleSelector(
+        page,
+        ['input[name="name"]', 'input[placeholder*="Full name"]'],
+        CREATE_ACCOUNT_TIMING.selectorTimeoutMs,
+        '名前入力欄'
+    );
+
+    await fillInputValue(page, nameSelector, fullName);
+    console.log(`   ${label}`);
+    await sleep(randomDelay(500, 1000));
+}
+
+async function ensurePasswordStepReady(page) {
+    const hasPasswordField = await hasAnySelector(page, BUSINESS_SIGNUP_PASSWORD_SELECTORS);
+    if (hasPasswordField) {
+        return;
+    }
+
+    const passwordLinkClicked = await clickFirstMatchingSelector(
+        page,
+        BUSINESS_SIGNUP_PASSWORD_LINK_SELECTORS,
+        {
+            waitForNavigation: true,
+            navigationTimeout: CREATE_ACCOUNT_TIMING.navigationShortTimeoutMs
+        }
+    );
+
+    if (passwordLinkClicked) {
+        console.log('   「パスワードで続行」をクリックしました');
+        await sleep(randomDelay(4000, 6000));
+    }
+}
+
+async function fillPasswordStepInput(page, account, label = 'パスワード入力完了') {
+    await ensurePasswordStepReady(page);
+    const passwordSelector = await waitForPasswordInput(page, CREATE_ACCOUNT_TIMING.inputTimeoutMs);
+
+    await fillInputValue(page, passwordSelector, account.password);
+    console.log(`   ${label}`);
+    await sleep(randomDelay(500, 1000));
+}
+
+async function submitPrimaryAction(page, errorMessage, options = {}) {
+    const waitForNavigation = options.waitForNavigation ?? true;
+    const navigationTimeout = options.navigationTimeout ?? CREATE_ACCOUNT_TIMING.navigationShortTimeoutMs;
+    const waitMin = options.waitMin ?? 5000;
+    const waitMax = options.waitMax ?? 7000;
+
+    const actionClicked = await clickSubmitButton(page, {
+        waitForNavigation,
+        navigationTimeout
+    });
+    if (!actionClicked) {
+        throw new Error(errorMessage);
+    }
+
+    await sleep(randomDelay(waitMin, waitMax));
+}
+
+async function fillVerificationCodeInput(page, verificationCode, label = `コード入力完了: ${verificationCode}`) {
+    await page.screenshot({ path: 'debug_before_code_input.png', fullPage: false });
+
+    const inputInfo = await evaluateWithRetry(page, () => {
+        const inputs = Array.from(document.querySelectorAll('input'));
+        return inputs.map((input, i) => ({
+            index: i,
+            type: input.type,
+            name: input.name,
+            id: input.id,
+            autocomplete: input.autocomplete,
+            maxlength: input.maxLength,
+            placeholder: input.placeholder,
+            value: input.value,
+            visible: input.offsetParent !== null,
+            rect: input.getBoundingClientRect()
+        }));
+    });
+    console.log('   検出された入力欄:', JSON.stringify(inputInfo, null, 2));
+
+    const codeSelector = await waitForCodeInput(page, CREATE_ACCOUNT_TIMING.inputTimeoutMs);
+    await page.click(codeSelector, { clickCount: 3 }).catch(() => null);
+    await sleep(500);
+
+    console.log('   方法1: evaluateで直接値を設定');
+    await evaluateWithRetry(page, (selectors, code) => {
+        const input = selectors
+            .map((selector) => document.querySelector(selector))
+            .find(Boolean);
+        if (!input) {
+            return false;
+        }
+
+        input.value = code;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+        return true;
+    }, BUSINESS_SIGNUP_CODE_SELECTORS, verificationCode);
+
+    await sleep(500);
+
+    const currentValue = await evaluateWithRetry(page, (selectors) => {
+        const input = selectors
+            .map((selector) => document.querySelector(selector))
+            .find(Boolean);
+        return input ? input.value : null;
+    }, BUSINESS_SIGNUP_CODE_SELECTORS);
+    console.log(`   現在の値: ${currentValue}`);
+
+    if (!currentValue || currentValue.length === 0) {
+        console.log('   方法2: キーボード入力を試行');
+        await page.click(codeSelector).catch(() => null);
+        await sleep(200);
+        await page.type(codeSelector, verificationCode, { delay: 50 });
+    }
+
+    await sleep(500);
+    console.log(`   ${label}`);
+    await sleep(1000);
+}
+
+async function fillBirthdayStep(page, birthday, label = `生年月日入力完了: ${birthday.month}/${birthday.day}/${birthday.year} (${birthday.age}歳)`) {
+    const monthEl = await page.$('[data-type="month"]');
+    if (monthEl) {
+        await monthEl.click({ clickCount: 3 });
+        await sleep(randomDelay(100, 200));
+        await monthEl.type(birthday.month, { delay: 0 });
+        console.log(`   月入力完了: ${birthday.month}`);
+        await sleep(randomDelay(300, 500));
+    }
+
+    const dayEl = await page.$('[data-type="day"]');
+    if (dayEl) {
+        await dayEl.click({ clickCount: 3 });
+        await sleep(randomDelay(100, 200));
+        await dayEl.type(birthday.day, { delay: 0 });
+        console.log(`   日入力完了: ${birthday.day}`);
+        await sleep(randomDelay(300, 500));
+    }
+
+    const yearEl = await page.$('[data-type="year"]');
+    if (yearEl) {
+        await yearEl.click({ clickCount: 3 });
+        await sleep(randomDelay(100, 200));
+        await yearEl.type(birthday.year, { delay: 0 });
+        console.log(`   年入力完了: ${birthday.year}`);
+        await sleep(randomDelay(300, 500));
+    }
+
+    const selectEls = await page.$$('select[tabindex="-1"]');
+    if (selectEls.length >= 3 && !monthEl) {
+        await evaluateWithRetry(page, (year, month, day) => {
+            const selects = document.querySelectorAll('select[tabindex="-1"]');
+            selects.forEach(select => {
+                const options = Array.from(select.options);
+                const hasYear = options.some(o => o.value.length === 4 && parseInt(o.value) > 1900);
+                const hasMonth = options.some(o => parseInt(o.value) >= 1 && parseInt(o.value) <= 12 && o.textContent.includes('月'));
+                const hasDay = options.some(o => parseInt(o.value) >= 1 && parseInt(o.value) <= 31);
+
+                if (hasYear && !hasMonth && !hasDay) {
+                    select.value = year;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                } else if (hasMonth) {
+                    select.value = month;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                } else if (hasDay && !hasYear) {
+                    select.value = day;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+        }, birthday.year, birthday.month, birthday.day);
+        console.log(`   年設定: ${birthday.year}`);
+        console.log(`   月設定: ${birthday.month}`);
+        console.log(`   日設定: ${birthday.day}`);
+        await sleep(randomDelay(500, 1000));
+    }
+
+    console.log(`   ${label}`);
+    await sleep(randomDelay(500, 1000));
+}
+
+async function completePasswordStep(page, account, errorMonitor) {
+    console.log('\n🔑 Step 6: パスワード入力');
+    await fillPasswordStepInput(page, account);
+
+    console.log('\n➡️ Step 7: Continueボタン');
+
+    if (errorMonitor) {
+        errorMonitor.setRecoveryContext({
+            stepName: 'Step 7',
+            pageStartStepLabel: 'Step 6',
+            maxRetries: 2,
+            retryPageStart: async (attempt) => {
+                console.log(`\n🔑 Step 6 (Retry ${attempt}): パスワード再入力`);
+                await fillPasswordStepInput(page, account, 'パスワード再入力完了');
+                console.log(`\n➡️ Step 7 (Retry ${attempt}): Continueボタン`);
+                await submitPrimaryAction(page, '再試行時のContinueボタンが見つかりません', {
+                    waitForNavigation: true,
+                    navigationTimeout: CREATE_ACCOUNT_TIMING.navigationShortTimeoutMs,
+                    waitMin: 5000,
+                    waitMax: 7000
+                });
+            }
+        });
+    }
+
+    await submitPrimaryAction(page, 'パスワード送信用のContinueボタンが見つかりません', {
+        waitForNavigation: true,
+        navigationTimeout: CREATE_ACCOUNT_TIMING.navigationShortTimeoutMs,
+        waitMin: 5000,
+        waitMax: 7000
+    });
+
+    if (errorMonitor) {
+        await errorMonitor.waitForIdle();
+    }
+}
+
+async function completeVerificationCodeStep(page, mailClient, errorMonitor) {
+    const waitLimitLabel = formatTimeoutLimitLabel(CREATE_ACCOUNT_TIMING.verificationCodeTimeoutMs);
+    console.log(`\n⏳ Step 8: 検証コード待機（${waitLimitLabel}）...`);
+    console.log(`   🌐 ${CREATE_ACCOUNT_TIMING.profile.toUpperCase()} モードのため待機を長めにしています`);
+    const verificationCode = await mailClient.waitForVerificationCode();
+
+    console.log('\n🔢 Step 9: 検証コード入力');
+    console.log(`   検証コード: ${verificationCode}`);
+    await fillVerificationCodeInput(page, verificationCode);
+
+    console.log('\n➡️ Step 10: Continueボタン');
+
+    if (errorMonitor) {
+        errorMonitor.setRecoveryContext({
+            stepName: 'Step 10',
+            pageStartStepLabel: 'Step 9',
+            maxRetries: 2,
+            retryPageStart: async (attempt) => {
+                console.log(`\n🔢 Step 9 (Retry ${attempt}): 検証コード再入力`);
+                await fillVerificationCodeInput(page, verificationCode, `コード再入力完了: ${verificationCode}`);
+                console.log(`\n➡️ Step 10 (Retry ${attempt}): Continueボタン`);
+                await submitPrimaryAction(page, '再試行時のContinueボタンが見つかりません', {
+                    waitForNavigation: true,
+                    navigationTimeout: CREATE_ACCOUNT_TIMING.navigationShortTimeoutMs,
+                    waitMin: 4000,
+                    waitMax: 6000
+                });
+            }
+        });
+    }
+
+    await submitPrimaryAction(page, 'コード送信用のContinueボタンが見つかりません', {
+        waitForNavigation: true,
+        navigationTimeout: CREATE_ACCOUNT_TIMING.navigationShortTimeoutMs,
+        waitMin: 4000,
+        waitMax: 6000
+    });
+
+    if (errorMonitor) {
+        await errorMonitor.waitForIdle();
+    }
 }
 
 // 「不明なエラー」監視と自動対処クラス
@@ -23,6 +999,41 @@ class ErrorMonitor {
         this.maxRetries = 5;
         this.lastErrorTime = 0;
         this.errorCooldown = 10000; // 10秒以内の連続エラーは無視
+        this.recoveryContext = null;
+        this.recoveryPromise = null;
+        this.isRecovering = false;
+        this.lastRecoveryError = null;
+    }
+
+    setRecoveryContext(context) {
+        this.recoveryContext = {
+            stepName: context.stepName || '不明ステップ',
+            pageStartStepLabel: context.pageStartStepLabel || '前のページ先頭',
+            maxRetries: context.maxRetries ?? 2,
+            retryPageStart: context.retryPageStart,
+            attemptCount: 0
+        };
+        this.retryCount = 0;
+        this.lastErrorTime = 0;
+        this.lastRecoveryError = null;
+    }
+
+    clearRecoveryContext() {
+        this.recoveryContext = null;
+        this.retryCount = 0;
+        this.lastRecoveryError = null;
+    }
+
+    async waitForIdle() {
+        if (this.recoveryPromise) {
+            await this.recoveryPromise;
+        }
+
+        if (this.lastRecoveryError) {
+            const recoveryError = this.lastRecoveryError;
+            this.lastRecoveryError = null;
+            throw recoveryError;
+        }
     }
 
     // 監視開始
@@ -41,9 +1052,9 @@ class ErrorMonitor {
         while (this.isRunning) {
             try {
                 await this.checkAndHandleError();
-                await sleep(2000); // 2秒間隔でチェック
+                await sleep(CREATE_ACCOUNT_TIMING.shortDelayMs);
             } catch (e) {
-                // 監視エラーは無視
+                console.log(`   ⚠️ エラー監視の復旧処理に失敗: ${e.message}`);
             }
         }
     }
@@ -51,6 +1062,10 @@ class ErrorMonitor {
     // エラーチェックと対処
     async checkAndHandleError() {
         const now = Date.now();
+
+        if (this.isRecovering) {
+            return;
+        }
         
         // クールダウンチェック
         if (now - this.lastErrorTime < this.errorCooldown) {
@@ -58,7 +1073,7 @@ class ErrorMonitor {
         }
 
         // エラーメッセージを検索
-        const errorInfo = await this.page.evaluate(() => {
+        const errorInfo = await evaluateWithRetry(this.page, () => {
             const errorElements = document.querySelectorAll('span, div, p, h1, h2, h3');
             for (const el of errorElements) {
                 const text = el.textContent.trim();
@@ -71,7 +1086,12 @@ class ErrorMonitor {
                     return {
                         found: true,
                         text: text,
-                        hasRetryButton: !!document.querySelector('button[data-dd-action-name="Try again"], button:has-text("もう一度試す"), button:has-text("Try again")')
+                        hasRetryButton: Array.from(document.querySelectorAll('button')).some((button) => {
+                            const buttonText = (button.textContent || '').trim();
+                            return buttonText.includes('もう一度試す') ||
+                                buttonText.includes('Try again') ||
+                                button.getAttribute('data-dd-action-name') === 'Try again';
+                        })
                     };
                 }
             }
@@ -91,24 +1111,44 @@ class ErrorMonitor {
 
             // 「もう一度試す」ボタンを探してクリック
             if (errorInfo.hasRetryButton) {
-                const clicked = await this.page.evaluate(() => {
-                    const buttons = Array.from(document.querySelectorAll('button'));
-                    const retryBtn = buttons.find(b => {
-                        const text = b.textContent.trim();
-                        return text.includes('もう一度試す') || 
-                               text.includes('Try again') ||
-                               b.getAttribute('data-dd-action-name') === 'Try again';
-                    });
-                    if (retryBtn) {
-                        retryBtn.click();
-                        return true;
-                    }
-                    return false;
-                });
+                const clicked = await clickElementByText(this.page, 'button', ['もう一度試す', 'try again']);
 
                 if (clicked) {
                     console.log('   ✅ 「もう一度試す」ボタンをクリックしました');
-                    await sleep(randomDelay(5000, 8000)); // 5-8秒待機
+                    const recoveryContext = this.recoveryContext;
+                    if (recoveryContext && typeof recoveryContext.retryPageStart === 'function') {
+                        recoveryContext.attemptCount += 1;
+
+                        if (recoveryContext.attemptCount > recoveryContext.maxRetries) {
+                            throw new Error(`${recoveryContext.stepName} の前段リトライ上限に達しました`);
+                        }
+
+                        console.log(
+                            `   ↩️ 前のページの先頭 (${recoveryContext.pageStartStepLabel}) からやり直します ` +
+                            `(${recoveryContext.attemptCount}/${recoveryContext.maxRetries})`
+                        );
+
+                        this.isRecovering = true;
+                        this.recoveryPromise = (async () => {
+                            await sleep(randomDelay(3000, 5000));
+                            try {
+                                await recoveryContext.retryPageStart(recoveryContext.attemptCount);
+                                this.lastRecoveryError = null;
+                            } catch (error) {
+                                this.lastRecoveryError = error;
+                                throw error;
+                            }
+                        })();
+
+                        try {
+                            await this.recoveryPromise;
+                        } finally {
+                            this.isRecovering = false;
+                            this.recoveryPromise = null;
+                        }
+                    } else {
+                        await sleep(randomDelay(5000, 8000));
+                    }
                 } else {
                     // ボタンがない場合はページリロード
                     console.log('   🔄 ページをリロードします');
@@ -195,68 +1235,6 @@ function generateFrenchAddress() {
     };
 }
 
-// ブラウザパス検出
-function detectBrowserPaths() {
-    const paths = {
-        brave: null,
-        chrome: null
-    };
-    
-    // 環境変数で強制指定されている場合は優先
-    const forceBrowser = process.env.FORCE_BROWSER;
-    
-    // Brave検出（OS別パス）
-    const isMac = process.platform === 'darwin';
-    const bravePaths = [
-        process.env.BRAVE_PATH,
-        ...(isMac ? [
-            '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
-            '/usr/bin/brave-browser'
-        ] : [
-            'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
-            'C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe'
-        ])
-    ];
-    
-    for (const path of bravePaths) {
-        if (path && fs.existsSync(path)) {
-            paths.brave = path;
-            break;
-        }
-    }
-    
-    // Chrome検出（OS別パス）
-    const chromePaths = [
-        process.env.CHROME_PATH,
-        ...(isMac ? [
-            '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-            '/usr/bin/google-chrome'
-        ] : [
-            'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-            'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
-        ])
-    ];
-    
-    for (const path of chromePaths) {
-        if (path && fs.existsSync(path)) {
-            paths.chrome = path;
-            break;
-        }
-    }
-    
-    // 強制指定がある場合はそのブラウザのみを返す
-    if (forceBrowser === 'brave' && paths.brave) {
-        return { brave: paths.brave, chrome: null };
-    }
-    if (forceBrowser === 'chrome' && paths.chrome) {
-        return { brave: null, chrome: paths.chrome };
-    }
-    
-    return paths;
-}
-
-// ==================== generator.email クライアント ====================
-
 // 12文字のランダム英数字パスワードを生成
 function generateRandomPassword() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -267,119 +1245,110 @@ function generateRandomPassword() {
     return password;
 }
 
-// generator.email を Puppeteer で操作する一時メールクライアント
 class GeneratorEmailClient {
-    constructor() {
+    constructor(browserType, browserPath) {
+        this.browserType = browserType;
+        this.browserPath = browserPath;
         this.email = null;
         this.password = generateRandomPassword();
-        this._browser = null; // 呼び出し元からbrowserをセットする
     }
 
-    /**
-     * generator.email でアドレスを新規作成
-     * 1. https://generator.email/ にアクセス
-     * 2. "Generate new e-mail" をクリック
-     * 3. #email_ch_text の値を取得
-     */
-    async createAccount(browser) {
-        this._browser = browser;
+    async createAccount() {
         console.log('  📧 generator.email でアドレスを生成中...');
 
+        const browser = await launchBrowser(this.browserType, this.browserPath, {
+            slowMo: 0,
+            preferRealChromeProfile: this.browserType === 'chrome',
+            profilePrefix: 'create_account_generator'
+        });
         const page = await browser.newPage();
+
         try {
-            await page.goto('https://generator.email/', {
+            let email = null;
+
+            const response = await gotoWithRetry(page, 'https://generator.email/', {
                 waitUntil: 'domcontentloaded',
-                timeout: 30000
-            });
-            await sleep(2000);
+                timeout: CREATE_ACCOUNT_TIMING.generatorNavigationTimeoutMs
+            }).catch(() => null);
 
-            // "Generate new e-mail" ボタンをクリック
-            await page.evaluate(() => {
-                const btns = Array.from(document.querySelectorAll('button.btn-success'));
-                const btn = btns.find(b => b.textContent.includes('Generate new e-mail'));
-                if (btn) btn.click();
-            });
-            await sleep(2000);
+            if (response) {
+                const html = await page.content().catch(() => '');
+                email = extractGeneratorEmailAddress(html);
+            }
 
-            // #copbtn (Copy) をクリック
-            await page.evaluate(() => {
-                const btn = document.querySelector('#copbtn');
-                if (btn) btn.click();
-            });
-            await sleep(500);
+            if (!email) {
+                await evaluateWithRetry(page, () => {
+                    const buttons = Array.from(document.querySelectorAll('button.btn-success, button'));
+                    const button = buttons.find((candidate) =>
+                        (candidate.textContent || '').includes('Generate new e-mail')
+                    );
+                    if (button) {
+                        button.click();
+                    }
+                }).catch(() => null);
+                await sleep(CREATE_ACCOUNT_TIMING.shortDelayMs);
 
-            // #email_ch_text からアドレスを読み取る
-            const email = await page.evaluate(() => {
-                const el = document.querySelector('#email_ch_text');
-                return el ? (el.value || el.textContent || '').trim() : null;
-            });
+                await evaluateWithRetry(page, () => {
+                    const button = document.querySelector('#copbtn');
+                    if (button) {
+                        button.click();
+                    }
+                }).catch(() => null);
+                await sleep(500);
 
-            if (!email || !email.includes('@')) {
-                throw new Error('generator.email: メールアドレス取得失敗');
+                const html = await page.content().catch(() => '');
+                email = extractGeneratorEmailAddress(html);
+            }
+
+            if (!email) {
+                email = createGeneratorFallbackEmail();
+                console.log('  ⚠️ generator.email の自動取得に失敗したため、既知ドメインでフォールバックします');
             }
 
             this.email = email;
+            this.password = generateRandomPassword();
+
             console.log(`  ✅ メールアドレス: ${this.email}`);
             console.log(`  🔑 パスワード: ${this.password}`);
             return { email: this.email, password: this.password };
         } finally {
-            await page.close();
+            await page.close().catch(() => null);
+            await browser.close().catch(() => null);
         }
     }
 
-    /**
-     * generator.email の受信箱から検証コードを取得
-     * 1. https://generator.email/{email} にアクセス
-     * 2. "Refresh" ボタンを定期的にクリック
-     * 3. .subj_div_45g45gg から6桁コードを抽出
-     */
-    async waitForVerificationCode(timeout = 300000) {
-        if (!this._browser) throw new Error('browserがセットされていません');
+    async waitForVerificationCode(
+        timeout = CREATE_ACCOUNT_TIMING.verificationCodeTimeoutMs,
+        interval = CREATE_ACCOUNT_TIMING.verificationCodeIntervalMs
+    ) {
+        const startTime = Date.now();
+        const unlimitedWait = isUnlimitedTimeoutMs(timeout);
+        const inboxUrl = `https://generator.email/${encodeURIComponent(this.email)}`;
 
         console.log('📧 検証コードを取得中... (generator.email)');
-        const inboxUrl = `https://generator.email/${encodeURIComponent(this.email)}`;
         console.log(`  📬 受信箱: ${inboxUrl}`);
 
-        const page = await this._browser.newPage();
-        try {
-            await page.goto(inboxUrl, {
-                waitUntil: 'domcontentloaded',
-                timeout: 30000
-            });
-            await sleep(2000);
+        const browser = await launchBrowser(this.browserType, this.browserPath, {
+            slowMo: 0,
+            preferRealChromeProfile: false,
+            profilePrefix: 'create_account_inbox'
+        });
+        const page = await browser.newPage();
 
-            const startTime = Date.now();
+        try {
             let attempt = 0;
 
-            while (Date.now() - startTime < timeout) {
-                attempt++;
+            while (unlimitedWait || Date.now() - startTime < timeout) {
+                attempt += 1;
 
-                // "Refresh" ボタンをクリック
-                await page.evaluate(() => {
-                    const btns = Array.from(document.querySelectorAll('button.btn-success'));
-                    const btn = btns.find(b => b.textContent.includes('Refresh'));
-                    if (btn) btn.click();
-                });
-                await sleep(3000);
+                await gotoWithRetry(page, inboxUrl, {
+                    waitUntil: 'domcontentloaded',
+                    timeout: CREATE_ACCOUNT_TIMING.generatorNavigationTimeoutMs
+                }).catch(() => null);
+                await sleep(randomDelay(2200, 3200));
 
-                // .subj_div_45g45gg から検証コードを抽出
-                const code = await page.evaluate(() => {
-                    const subjects = Array.from(document.querySelectorAll('.subj_div_45g45gg'));
-                    for (const el of subjects) {
-                        const text = el.textContent || '';
-                        const m = text.match(/Your ChatGPT code is (\d{6})/);
-                        if (m) return m[1];
-                        if (text.includes('ChatGPT') || text.includes('OpenAI')) {
-                            const m2 = text.match(/\b(\d{6})\b/);
-                            if (m2) return m2[1];
-                        }
-                    }
-                    // ページ全体も確認
-                    const body = document.body.innerText || '';
-                    const m3 = body.match(/Your ChatGPT code is (\d{6})/);
-                    if (m3) return m3[1];
-                    return null;
-                });
+                const bodyText = await evaluateWithRetry(page, () => document.body?.innerText || '').catch(() => '');
+                const code = extractGeneratorVerificationCode(bodyText);
 
                 if (code) {
                     console.log(`  ✅ 検証コード取得: ${code}`);
@@ -391,18 +1360,16 @@ class GeneratorEmailClient {
                     console.log(`  ⏳ メール待機中... (${elapsed}秒経過)`);
                 }
 
-                await sleep(5000);
+                await sleep(interval);
             }
 
-            throw new Error('検証コード取得タイムアウト（5分）');
+            throw new Error('generator.email検証コード取得タイムアウト');
         } finally {
-            await page.close();
+            await page.close().catch(() => null);
+            await browser.close().catch(() => null);
         }
     }
 }
-
-// MailTMClient は GeneratorEmailClient のエイリアスとして残す（後方互換）
-const MailTMClient = GeneratorEmailClient;
 
 // ランダムな名前生成
 function generateName() {
@@ -441,46 +1408,33 @@ function generateBirthday() {
 }
 
 // ブラウザを起動
-async function launchBrowser(browserType, browserPath) {
-    const headlessMode = process.env.HEADLESS === 'true';
-    
-    const commonOptions = {
-        headless: headlessMode,
-        executablePath: browserPath,
-        slowMo: 50,
-        timeout: 120000,
-        protocolTimeout: 120000,
-        args: [
-            '--width=1920',
-            '--height=1080',
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-blink-features=AutomationControlled'
-        ]
+async function launchBrowser(browserType, browserPath, launchOptions = {}) {
+    const options = {
+        browserType,
+        browserPath,
+        baseDir: __dirname,
+        slowMo: launchOptions.slowMo ?? 50,
+        timeout: launchOptions.timeout ?? CREATE_ACCOUNT_TIMING.browserLaunchTimeoutMs,
+        protocolTimeout: launchOptions.protocolTimeout ?? CREATE_ACCOUNT_TIMING.browserProtocolTimeoutMs,
+        preferRealChromeProfile: launchOptions.preferRealChromeProfile ?? (browserType === 'chrome'),
+        profilePrefix: launchOptions.profilePrefix || 'create_account',
+        log: console.log,
+        keepOpen: launchOptions.keepOpen ?? false
     };
-    
+
     if (browserType === 'brave') {
         console.log('🦁 Braveを起動中...');
-        return await puppeteer.launch({
-            ...commonOptions,
-            ignoreDefaultArgs: ['--enable-automation']
-        });
-    } else {
-        console.log('🌐 Chromeを起動中...');
-        return await puppeteer.launch({
-            ...commonOptions,
-            ignoreDefaultArgs: ['--enable-automation']
-        });
+        return launchRealBrowser(puppeteer, options);
     }
+
+    console.log('🌐 Chromeを起動中...');
+    return launchRealBrowser(puppeteer, options);
 }
 
 // メイン処理
 async function signupWithBrowser(browserType, browserPath, mailClient, account) {
-    const browser = await launchBrowser(browserType, browserPath);
-    
-    // generator.email クライアントにブラウザをセット
-    mailClient._browser = browser;
+    const keepOpen = resolveCreateAccountKeepOpen();
+    const browser = await launchBrowser(browserType, browserPath, { keepOpen });
     
     // エラーモニターを初期化（後で開始）
     let errorMonitor = null;
@@ -494,369 +1448,135 @@ async function signupWithBrowser(browserType, browserPath, mailClient, account) 
         errorMonitor.start();
         console.log('   🔍 エラー監視を開始しました');
         
-        // Step 2: ChatGPTチームプライシングページへ
-        console.log('\n🌐 Step 2: ChatGPTチームプライシングページへ移動');
-        await page.goto('https://chatgpt.com/?promo_campaign=team1dollar#team-pricing', {
+        await clearOpenAIAuthState(page);
+
+        // Step 2: ChatGPTチームサインアップページへ
+        console.log('\n🌐 Step 2: ChatGPTチームサインアップページへ移動');
+        await gotoWithRetry(page, BUSINESS_SIGNUP_DIRECT_URL, {
             waitUntil: 'domcontentloaded',
-            timeout: 60000
+            timeout: CREATE_ACCOUNT_TIMING.navigationTimeoutMs
         });
-        await sleep(5000);
+        await sleep(randomDelay(2200, 3200));
         console.log('   ✅ ページ読み込み成功');
         
         // Step 3: チームプラン登録ボタン
         console.log('\n👆 Step 3: チームプラン登録ボタンを探してクリック');
         await sleep(randomDelay(2000, 4000));
-        
-        await page.evaluate(() => {
-            const buttons = Array.from(document.querySelectorAll('button, a'));
-            const btn = buttons.find(b => {
-                const text = b.textContent.trim().toLowerCase();
-                return text.includes('sign up for free') || 
-                       text.includes('まずは試してみましょう') ||
-                       text.includes('get started') ||
-                       text.includes('get team') ||
-                       text.includes('start now') ||
-                       text.includes('sign up');
-            });
-            if (btn) btn.click();
-        });
-        
-        console.log('   ボタンをクリックしました');
-        await sleep(randomDelay(4000, 6000));
+        await prepareBusinessSignupEmailEntry(page);
         
         // Step 4: メールアドレス入力
         console.log('\n✉️ Step 4: メールアドレス入力');
-        
-        const emailInput = await page.waitForSelector('input[type="email"], input[name="email"]', {
-            visible: true,
-            timeout: 15000
-        });
-        
-        await emailInput.click();
-        await sleep(randomDelay(100, 300));
-        
-        await emailInput.type(account.email, { delay: 0 });
-        console.log(`   メール入力完了: ${account.email}`);
-        await sleep(randomDelay(500, 1000));
+        await fillEmailStep(page, account.email);
         
         // Step 5: Continueボタン
         console.log('\n➡️ Step 5: Continueボタン');
-        
-        await Promise.all([
-            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => null),
-            page.evaluate(() => {
-                const btn = document.querySelector('button[type="submit"]');
-                if (btn) btn.click();
-            })
-        ]);
-        
-        console.log('   Continueボタンをクリックしました');
-        await sleep(randomDelay(5000, 7000));
-        
-        // パスワードページに到達したか確認
-        const hasPasswordField = await page.evaluate(() => {
-            return !!document.querySelector('input[type="password"], input[name="new-password"]');
-        });
-        
-        if (!hasPasswordField) {
-            throw new Error('パスワード入力ページに到達できません');
-        }
-        
-        // Step 6: パスワード入力
-        console.log('\n🔑 Step 6: パスワード入力');
-        
-        const passwordInput = await page.waitForSelector('input[type="password"], input[name="new-password"]', {
-            visible: true,
-            timeout: 15000
-        });
-        
-        await passwordInput.click();
-        await sleep(randomDelay(100, 300));
-        
-        await passwordInput.type(account.password, { delay: 0 });
-        console.log('   パスワード入力完了');
-        await sleep(randomDelay(500, 1000));
-        
-        // Step 7: Continueボタン
-        console.log('\n➡️ Step 7: Continueボタン');
-        
-        await Promise.all([
-            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => null),
-            page.evaluate(() => {
-                document.querySelector('button[type="submit"]')?.click();
-            })
-        ]);
-        
-        await sleep(randomDelay(5000, 7000));
-        
-        // エラーチェック: 「不明なエラーが発生しました」が表示されたか
-        const hasError = await page.evaluate(() => {
-            const errorElements = document.querySelectorAll('span, div, p');
-            return Array.from(errorElements).some(el => 
-                el.textContent.includes('不明なエラーが発生しました') ||
-                el.textContent.includes('An unknown error occurred')
-            );
-        });
-        
-        if (hasError) {
-            console.log('   ⚠️ 不明なエラーが検出されました。リトライします...');
-            
-            // 「もう一度試す」ボタンを探してクリック
-            const retryClicked = await page.evaluate(() => {
-                const buttons = Array.from(document.querySelectorAll('button'));
-                const retryBtn = buttons.find(b => {
-                    const text = b.textContent.trim();
-                    return text.includes('もう一度試す') || 
-                           text.includes('Try again') ||
-                           b.getAttribute('data-dd-action-name') === 'Try again';
-                });
-                if (retryBtn) {
-                    retryBtn.click();
-                    return true;
+
+        if (errorMonitor) {
+            errorMonitor.setRecoveryContext({
+                stepName: 'Step 5',
+                pageStartStepLabel: 'Step 4',
+                maxRetries: 2,
+                retryPageStart: async (attempt) => {
+                    console.log(`\n✉️ Step 4 (Retry ${attempt}): メール再入力`);
+                    await fillEmailStep(page, account.email, `メール再入力完了: ${account.email}`);
+                    console.log(`\n➡️ Step 5 (Retry ${attempt}): Continueボタン`);
+                    await submitPrimaryAction(page, 'Continueボタンが見つかりません', {
+                        waitForNavigation: true,
+                        navigationTimeout: CREATE_ACCOUNT_TIMING.navigationShortTimeoutMs,
+                        waitMin: 5000,
+                        waitMax: 7000
+                    });
                 }
-                return false;
             });
-            
-            if (retryClicked) {
-                console.log('   ✅ もう一度試すボタンをクリックしました');
-                await sleep(randomDelay(3000, 5000));
-                
-                // パスワード入力からやり直し
-                console.log('\n🔑 Step 6 (Retry): パスワード再入力');
-                const passwordInputRetry = await page.waitForSelector('input[type="password"], input[name="new-password"]', {
-                    visible: true,
-                    timeout: 15000
-                });
-                
-                await passwordInputRetry.click();
-                await sleep(randomDelay(100, 300));
-                await passwordInputRetry.type(account.password, { delay: 0 });
-                console.log('   パスワード再入力完了');
-                await sleep(randomDelay(500, 1000));
-                
-                // Continueボタンを再クリック
-                console.log('\n➡️ Step 7 (Retry): Continueボタン');
-                await Promise.all([
-                    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => null),
-                    page.evaluate(() => {
-                        document.querySelector('button[type="submit"]')?.click();
-                    })
-                ]);
-                await sleep(randomDelay(5000, 7000));
-            }
         }
-        
-        // Step 8: 検証コード待機
-        console.log('\n⏳ Step 8: 検証コード待機（最大5分）...');
-        const verificationCode = await mailClient.waitForVerificationCode();
-        
-        // Step 9: 検証コード入力
-        console.log('\n🔢 Step 9: 検証コード入力');
-        console.log(`   検証コード: ${verificationCode}`);
-        
-        // デバッグ: スクリーンショット撮影
-        await page.screenshot({ path: 'debug_before_code_input.png', fullPage: false });
-        
-        // デバッグ: ページ上の全input要素を確認
-        const inputInfo = await page.evaluate(() => {
-            const inputs = Array.from(document.querySelectorAll('input'));
-            return inputs.map((input, i) => ({
-                index: i,
-                type: input.type,
-                name: input.name,
-                id: input.id,
-                autocomplete: input.autocomplete,
-                maxlength: input.maxLength,
-                placeholder: input.placeholder,
-                value: input.value,
-                visible: input.offsetParent !== null,
-                rect: input.getBoundingClientRect()
-            }));
+
+        await submitPrimaryAction(page, 'Continueボタンが見つかりません', {
+            waitForNavigation: true,
+            navigationTimeout: CREATE_ACCOUNT_TIMING.navigationShortTimeoutMs,
+            waitMin: 5000,
+            waitMax: 7000
         });
-        console.log('   検出された入力欄:', JSON.stringify(inputInfo, null, 2));
-        
-        // まずシンプルなセレクタで試す
-        let codeInput = null;
-        try {
-            codeInput = await page.waitForSelector('input[type="text"]', { visible: true, timeout: 10000 });
-            console.log('   入力欄検出: input[type="text"]');
-        } catch (e) {
-            // フォールバック
+        console.log('   Continueボタンをクリックしました');
+
+        if (errorMonitor) {
+            await errorMonitor.waitForIdle();
         }
         
-        // 見つからなければ他のセレクタも試す
-        if (!codeInput) {
-            const selectors = [
-                'input[autocomplete="one-time-code"]',
-                'input[maxlength="6"]',
-                'input[name="code"]',
-                'input#code',
-                'input[placeholder*="code"]',
-                'input[placeholder*="コード"]'
-            ];
-            for (const selector of selectors) {
-                try {
-                    codeInput = await page.$(selector);
-                    if (codeInput) {
-                        console.log(`   入力欄検出: ${selector}`);
-                        break;
-                    }
-                } catch (e) {}
+        const nextStep = await waitForEmailNextStep(page, CREATE_ACCOUNT_TIMING.nextStepTimeoutMs);
+        if (errorMonitor) {
+            errorMonitor.clearRecoveryContext();
+        }
+
+        if (nextStep === 'password') {
+            await completePasswordStep(page, account, errorMonitor);
+            await completeVerificationCodeStep(page, mailClient, errorMonitor);
+        } else if (nextStep === 'code') {
+            console.log('   次の画面は確認コード入力です');
+            await completeVerificationCodeStep(page, mailClient, errorMonitor);
+
+            const postCodeStep = await waitForEmailNextStep(page, CREATE_ACCOUNT_TIMING.retryEntryStateTimeoutMs);
+            if (postCodeStep === 'password') {
+                console.log('   コード認証後にパスワード設定へ進んだため、続けて処理します');
+                await completePasswordStep(page, account, errorMonitor);
             }
+        } else {
+            throw new Error(`メール入力後の次画面を判定できません (URL: ${page.url()})`);
         }
-        
-        if (!codeInput) {
-            throw new Error('検証コード入力欄が見つかりません');
-        }
-        
-        // 入力欄にフォーカス（3回クリックして確実にフォーカス）
-        await codeInput.click({ clickCount: 3 });
-        await sleep(500);
-        
-        // 方法1: evaluateで直接値を設定 + イベント発火
-        console.log('   方法1: evaluateで直接値を設定');
-        await page.evaluate((code) => {
-            const input = document.querySelector('input[type="text"]') || 
-                         document.querySelector('input[autocomplete="one-time-code"]') ||
-                         document.querySelector('input[maxlength="6"]');
-            if (input) {
-                // 値を設定
-                input.value = code;
-                // 入力イベントを発火
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-                input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-                return true;
-            }
-            return false;
-        }, verificationCode);
-        
-        await sleep(500);
-        
-        // 値が設定されたか確認
-        const currentValue = await page.evaluate(() => {
-            const input = document.querySelector('input[type="text"]') || 
-                         document.querySelector('input[autocomplete="one-time-code"]');
-            return input ? input.value : null;
-        });
-        console.log(`   現在の値: ${currentValue}`);
-        
-        // 値が空なら方法2を試す
-        if (!currentValue || currentValue.length === 0) {
-            console.log('   方法2: キーボード入力を試行');
-            await codeInput.click();
-            await sleep(200);
-            await codeInput.type(verificationCode, { delay: 50 });
-        }
-        
-        await sleep(500);
-        console.log(`   コード入力完了: ${verificationCode}`);
-        await sleep(1000);
-        
-        // Step 10: Continueボタン
-        console.log('\n➡️ Step 10: Continueボタン');
-        await Promise.all([
-            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => null),
-            page.evaluate(() => {
-                document.querySelector('button[type="submit"]')?.click();
-            })
-        ]);
-        
-        await sleep(randomDelay(4000, 6000));
         
         // Step 11: 名前入力
         console.log('\n👤 Step 11: 名前入力');
         const fullName = generateName();
-        const nameInput = await page.waitForSelector('input[name="name"], input[placeholder*="Full name"]', {
-            visible: true,
-            timeout: 15000
-        });
-        
-        await nameInput.click();
-        await sleep(randomDelay(100, 300));
-        
-        await nameInput.type(fullName, { delay: 0 });
-        console.log(`   名前入力完了: ${fullName}`);
-        await sleep(randomDelay(500, 1000));
+        if (errorMonitor) {
+            errorMonitor.clearRecoveryContext();
+        }
+        await fillNameStep(page, fullName);
         
         // Step 12: 生年月日入力
         console.log('\n📅 Step 12: 生年月日設定');
         const birthday = generateBirthday();
-        
-        // 方法1: 従来の data-type 属性（input要素）
-        const monthEl = await page.$('[data-type="month"]');
-        if (monthEl) {
-            await monthEl.click({ clickCount: 3 });
-            await sleep(randomDelay(100, 200));
-            await monthEl.type(birthday.month, { delay: 0 });
-            console.log(`   月入力完了: ${birthday.month}`);
-            await sleep(randomDelay(300, 500));
-        }
-        
-        const dayEl = await page.$('[data-type="day"]');
-        if (dayEl) {
-            await dayEl.click({ clickCount: 3 });
-            await sleep(randomDelay(100, 200));
-            await dayEl.type(birthday.day, { delay: 0 });
-            console.log(`   日入力完了: ${birthday.day}`);
-            await sleep(randomDelay(300, 500));
-        }
-        
-        const yearEl = await page.$('[data-type="year"]');
-        if (yearEl) {
-            await yearEl.click({ clickCount: 3 });
-            await sleep(randomDelay(100, 200));
-            await yearEl.type(birthday.year, { delay: 0 });
-            console.log(`   年入力完了: ${birthday.year}`);
-            await sleep(randomDelay(300, 500));
-        }
-        
-        // 方法2: React Aria Select（隠されたselect要素）
-        const selectEls = await page.$$('select[tabindex="-1"]');
-        if (selectEls.length >= 3 && !monthEl) {
-            // 年、月、日のselect要素を特定して設定
-            await page.evaluate((year, month, day) => {
-                const selects = document.querySelectorAll('select[tabindex="-1"]');
-                selects.forEach(select => {
-                    const options = Array.from(select.options);
-                    // 年の判定（4桁の値があるか）
-                    const hasYear = options.some(o => o.value.length === 4 && parseInt(o.value) > 1900);
-                    // 月の判定（1-12の範囲）
-                    const hasMonth = options.some(o => parseInt(o.value) >= 1 && parseInt(o.value) <= 12 && o.textContent.includes('月'));
-                    // 日の判定（1-31の範囲）
-                    const hasDay = options.some(o => parseInt(o.value) >= 1 && parseInt(o.value) <= 31);
-                    
-                    if (hasYear && !hasMonth && !hasDay) {
-                        select.value = year;
-                        select.dispatchEvent(new Event('change', { bubbles: true }));
-                    } else if (hasMonth) {
-                        select.value = month;
-                        select.dispatchEvent(new Event('change', { bubbles: true }));
-                    } else if (hasDay && !hasYear) {
-                        select.value = day;
-                        select.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
-                });
-            }, birthday.year, birthday.month, birthday.day);
-            console.log(`   年設定: ${birthday.year}`);
-            console.log(`   月設定: ${birthday.month}`);
-            console.log(`   日設定: ${birthday.day}`);
-            await sleep(randomDelay(500, 1000));
-        }
-        
-        console.log(`   生年月日入力完了: ${birthday.month}/${birthday.day}/${birthday.year} (${birthday.age}歳)`);
-        await sleep(randomDelay(500, 1000));
+        await fillBirthdayStep(page, birthday);
         
         // Step 13: Finish creating account
         console.log('\n✅ Step 13: Finish creating account');
-        await Promise.all([
-            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => null),
-            page.evaluate(() => {
-                document.querySelector('button[type="submit"]')?.click();
-            })
-        ]);
-        
-        await sleep(randomDelay(5000, 7000));
+        if (errorMonitor) {
+            errorMonitor.setRecoveryContext({
+                stepName: 'Step 13',
+                pageStartStepLabel: 'Step 11',
+                maxRetries: 2,
+                retryPageStart: async (attempt) => {
+                    console.log(`\n👤 Step 11 (Retry ${attempt}): 名前再入力`);
+                    await fillNameStep(page, fullName, `名前再入力完了: ${fullName}`);
+                    console.log(`\n📅 Step 12 (Retry ${attempt}): 生年月日再入力`);
+                    await fillBirthdayStep(
+                        page,
+                        birthday,
+                        `生年月日再入力完了: ${birthday.month}/${birthday.day}/${birthday.year} (${birthday.age}歳)`
+                    );
+                    console.log(`\n✅ Step 13 (Retry ${attempt}): Finish creating account`);
+                    await submitPrimaryAction(page, 'アカウント作成完了ボタンが見つかりません', {
+                        waitForNavigation: true,
+                        navigationTimeout: CREATE_ACCOUNT_TIMING.navigationShortTimeoutMs,
+                        waitMin: 5000,
+                        waitMax: 7000
+                    });
+                }
+            });
+        }
+
+        await submitPrimaryAction(page, 'アカウント作成完了ボタンが見つかりません', {
+            waitForNavigation: true,
+            navigationTimeout: CREATE_ACCOUNT_TIMING.navigationShortTimeoutMs,
+            waitMin: 5000,
+            waitMax: 7000
+        });
+
+        if (errorMonitor) {
+            await errorMonitor.waitForIdle();
+        }
+        await throwIfUnsupportedEmailError(page);
+        if (errorMonitor) {
+            errorMonitor.clearRecoveryContext();
+        }
         
         // Step 14: オンボーディングフロー処理（Okay, let's go / Skip）
         console.log('\n👋 Step 14: オンボーディングフロー処理');
@@ -868,35 +1588,24 @@ async function signupWithBrowser(browserType, browserPath, mailClient, account) 
         // pricingページにリダイレクトされた場合はchatgpt.comに移動
         if (currentUrl.includes('#pricing') || currentUrl.includes('/pricing')) {
             console.log('   pricingページを検出、チャットページに移動します');
-            await page.goto('https://chatgpt.com', {
+            await gotoWithRetry(page, 'https://chatgpt.com', {
                 waitUntil: 'domcontentloaded',
-                timeout: 60000
+                timeout: CREATE_ACCOUNT_TIMING.navigationTimeoutMs
             });
-            await sleep(5000);
+            await sleep(randomDelay(4000, 6000));
             currentUrl = page.url();
         }
         
         // "Okay, let's go" または "Skip" ボタンを探してクリック
         const maxRetries = 5;
         for (let i = 0; i < maxRetries; i++) {
-            const buttonClicked = await page.evaluate(() => {
-                const buttons = Array.from(document.querySelectorAll('button'));
-                const targetBtn = buttons.find(b => {
-                    const text = b.textContent.trim().toLowerCase();
-                    return text.includes("okay, let's go") || 
-                           text.includes("okay") ||
-                           text.includes("skip") ||
-                           text.includes("start") ||
-                           text.includes("get started") ||
-                           text.includes("始めましょう") ||
-                           text.includes("スキップ");
-                });
-                if (targetBtn) {
-                    targetBtn.click();
-                    return true;
-                }
-                return false;
-            });
+            await throwIfUnsupportedEmailError(page);
+
+            const buttonClicked = await clickElementByText(
+                page,
+                'button',
+                ["okay, let's go", 'okay', 'skip', 'start', 'get started', '始めましょう', 'スキップ']
+            );
             
             if (buttonClicked) {
                 console.log('   オンボーディングボタンをクリックしました');
@@ -940,13 +1649,10 @@ async function signupWithBrowser(browserType, browserPath, mailClient, account) 
                     console.log('   ✅ ChatGPTチャットページに到達しました');
                     break;
                 }
-                await sleep(2000);
+                await sleep(CREATE_ACCOUNT_TIMING.shortDelayMs);
             }
         }
         
-        // Step 15: 完了待機
-        console.log('\n⏳ Step 15: 完了待機（5秒）');
-        await sleep(5000);
         console.log('   ✅ アカウント作成プロセス完了');
         
         // エラーモニター停止
@@ -955,8 +1661,12 @@ async function signupWithBrowser(browserType, browserPath, mailClient, account) 
             console.log('   🔍 エラー監視を停止しました');
         }
         
-        // ブラウザを閉じる
-        await browser.close();
+        if (keepOpen) {
+            console.log('   🖥️ keepモード: Chromeを開いたままにします。手動で閉じてください');
+            await browser.disconnect();
+        } else {
+            await browser.close();
+        }
         
         return {
             success: true,
@@ -978,72 +1688,68 @@ async function signupWithBrowser(browserType, browserPath, mailClient, account) 
 
 // メイン処理（自動フォールバック）
 async function signupUnified() {
-    console.log('🚀 ChatGPTアカウント作成開始（自動ブラウザ選択）\n');
+    console.log('🚀 ChatGPTアカウント作成開始（Chrome実ブラウザ）\n');
+    console.log(`🌐 ネットワーク配慮モード: ${CREATE_ACCOUNT_TIMING.profile.toUpperCase()}\n`);
     
     // ブラウザパスを検出
     const browserPaths = detectBrowserPaths();
     console.log('🔍 ブラウザ検出結果:');
-    console.log(`   Brave: ${browserPaths.brave || '未検出'}`);
     console.log(`   Chrome: ${browserPaths.chrome || '未検出'}`);
     console.log('');
     
-    // ブラウザ優先順位：Brave → Chrome
-    const browsers = [
-        { type: 'brave', path: browserPaths.brave },
-        { type: 'chrome', path: browserPaths.chrome }
-    ].filter(b => b.path);
+    const browsers = getChromeOnlyBrowserCandidates(browserPaths);
     
     if (browsers.length === 0) {
-        throw new Error('使用可能なブラウザが見つかりません。BraveまたはChromeをインストールしてください。');
+        throw new Error('Chrome が見つかりません。Google Chrome をインストールしてください。');
     }
     
     // 各ブラウザで試行（失敗時は新しいアカウントでリトライ）
     let lastError = null;
+    const maxAttemptsPerBrowser = 3;
     
     for (const browser of browsers) {
         console.log(`\n${'='.repeat(50)}`);
         console.log(`🔄 ${browser.type.toUpperCase()} で試行します`);
         console.log(`${'='.repeat(50)}\n`);
-        
-        // ブラウザごとに新しいgenerator.emailアカウントを作成
-        console.log('📧 Step 1: generator.email アドレス生成');
-        const mailClient = new GeneratorEmailClient();
-        
-        // generator.email操作用に軽量なChromiumを一時起動
-        const tempBrowser = await require('puppeteer').launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-        let account;
-        try {
-            account = await mailClient.createAccount(tempBrowser);
-        } finally {
-            await tempBrowser.close();
-        }
-        console.log(`   Email: ${account.email}`);
-        console.log(`   Pass: ${account.password}`);
-        console.log('');
-        
-        try {
-            const result = await signupWithBrowser(browser.type, browser.path, mailClient, account);
-            
-            console.log('\n✅ サインアップ完了！');
-            console.log(`   使用ブラウザ: ${result.browser}`);
-            console.log(`   Email: ${result.email}`);
-            console.log(`   Password: ${result.password}`);
-            console.log(`   Name: ${result.name}`);
-            
-            return result;
-            
-        } catch (error) {
-            console.error(`\n❌ ${browser.type} で失敗:`, error.message);
-            lastError = error;
-            
-            // 次のブラウザがある場合は続行
-            if (browsers.indexOf(browser) < browsers.length - 1) {
-                console.log('⏳ 次のブラウザでリトライします...');
-                await sleep(3000);
+
+        for (let attempt = 1; attempt <= maxAttemptsPerBrowser; attempt++) {
+            // ブラウザごとに新しい generator.email アカウントを作成
+            console.log('📧 Step 1: generator.email アドレス生成');
+            const mailClient = new GeneratorEmailClient(browser.type, browser.path);
+            const account = await mailClient.createAccount();
+            console.log(`   Email: ${account.email}`);
+            console.log(`   Pass: ${account.password}`);
+            console.log('');
+
+            try {
+                const result = await signupWithBrowser(browser.type, browser.path, mailClient, account);
+
+                console.log('\n✅ サインアップ完了！');
+                console.log(`   使用ブラウザ: ${result.browser}`);
+                console.log(`   Email: ${result.email}`);
+                console.log(`   Password: ${result.password}`);
+                console.log(`   Name: ${result.name}`);
+
+                return result;
+
+            } catch (error) {
+                console.error(`\n❌ ${browser.type} で失敗:`, error.message);
+                lastError = error;
+
+                if (shouldRetrySignupAttempt(error) && attempt < maxAttemptsPerBrowser) {
+                    console.log(`⏳ 再試行対象のため、新しいメールでやり直します... (${attempt + 1}/${maxAttemptsPerBrowser})`);
+                    await sleep(randomDelay(2200, 3200));
+                    continue;
+                }
+
+                break;
             }
+        }
+
+        // 次のブラウザがある場合は続行
+        if (browsers.indexOf(browser) < browsers.length - 1) {
+            console.log('⏳ 次のブラウザでリトライします...');
+            await sleep(randomDelay(2200, 3200));
         }
     }
     

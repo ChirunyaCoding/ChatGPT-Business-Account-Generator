@@ -95,8 +95,8 @@ async function openBrowser() {
     
     const headlessMode = process.env.HEADLESS === 'true';
     
-    // PayPalログイン維持用のユーザーデータディレクトリ
-    const userDataDir = path.join(__dirname, '..', '.paypal_user_data');
+    // openbrowser 専用のユーザーデータディレクトリ
+    const userDataDir = path.join(__dirname, '..', '.open_browser_user_data');
     
     console.log(`🚀 ${browserType === 'brave' ? '🦁 Brave' : '🌐 Chrome'}を起動中...`);
     

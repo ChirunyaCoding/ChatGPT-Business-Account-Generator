@@ -12,10 +12,6 @@ const {
     resolveCreateAccountChildTimeoutMs,
     summarizeCreateAccountFailure
 } = require('./utils/create-account-runtime');
-const {
-    formatDiscordStartupError,
-    retryDiscordStartupStep
-} = require('./utils/discord-startup');
 
 require('dotenv').config();
 
@@ -25,11 +21,6 @@ const GUILD_ID = process.env.DISCORD_GUILD_ID;
 
 if (!TOKEN) {
     console.error('❌ DISCORD_TOKENが設定されていません');
-    process.exit(1);
-}
-
-if (!CLIENT_ID) {
-    console.error('❌ DISCORD_CLIENT_IDが設定されていません');
     process.exit(1);
 }
 
@@ -98,47 +89,40 @@ const commands = [
 // コマンド登録
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
-async function registerSlashCommands() {
-    console.log('🔄 スラッシュコマンドを登録中...');
-    
-    // グローバルコマンドを空に（過去のコマンドを削除）
-    console.log('🌐 グローバルコマンドをクリア...');
-    await rest.put(
-        Routes.applicationCommands(CLIENT_ID),
-        { body: [] }
-    );
-    console.log('✅ グローバルコマンドをクリアしました');
-    
-    if (GUILD_ID) {
-        // ギルドコマンドを登録（即時反映）
-        await rest.put(
-            Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-            { body: commands }
-        );
-        console.log(`✅ サーバー ${GUILD_ID} にコマンドを登録しました`);
-        console.log('📋 登録済みコマンド:');
-        commands.forEach(cmd => console.log(`   • /${cmd.name}`));
-        return;
-    }
-
-    // グローバルコマンドを登録（反映に最大1時間）
-    await rest.put(
-        Routes.applicationCommands(CLIENT_ID),
-        { body: commands }
-    );
-    console.log('✅ グローバルコマンドを登録しました');
-    console.log('⏳ 反映に最大1時間かかる場合があります');
-}
-
-async function loginDiscordClient() {
+(async () => {
     try {
-        client.destroy();
+        console.log('🔄 スラッシュコマンドを登録中...');
+        
+        // グローバルコマンドを空に（過去のコマンドを削除）
+        console.log('🌐 グローバルコマンドをクリア...');
+        await rest.put(
+            Routes.applicationCommands(CLIENT_ID),
+            { body: [] }
+        );
+        console.log('✅ グローバルコマンドをクリアしました');
+        
+        if (GUILD_ID) {
+            // ギルドコマンドを登録（即時反映）
+            await rest.put(
+                Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+                { body: commands }
+            );
+            console.log(`✅ サーバー ${GUILD_ID} にコマンドを登録しました`);
+            console.log('📋 登録済みコマンド:');
+            commands.forEach(cmd => console.log(`   • /${cmd.name}`));
+        } else {
+            // グローバルコマンドを登録（反映に最大1時間）
+            await rest.put(
+                Routes.applicationCommands(CLIENT_ID),
+                { body: commands }
+            );
+            console.log('✅ グローバルコマンドを登録しました');
+            console.log('⏳ 反映に最大1時間かかる場合があります');
+        }
     } catch (error) {
-        // 既に未接続なら無視
+        console.error('❌ コマンド登録エラー:', error);
     }
-
-    return client.login(TOKEN);
-}
+})();
 
 // Botクライアント作成
 const client = new Client({
@@ -148,7 +132,7 @@ const client = new Client({
     ]
 });
 
-const MAX_CONCURRENT_CREATE_ACCOUNT = 1;
+const MAX_CONCURRENT_CREATE_ACCOUNT = 5;
 const CREATE_ACCOUNT_CHILD_TIMEOUT_MS = resolveCreateAccountChildTimeoutMs();
 
 client.once('clientReady', () => {
@@ -746,22 +730,5 @@ async function handleAccountListCommand(interaction) {
     }
 }
 
-async function startDiscordBot() {
-    try {
-        await retryDiscordStartupStep(
-            'スラッシュコマンド登録',
-            () => registerSlashCommands(),
-            { log: console.warn }
-        );
-        await retryDiscordStartupStep(
-            'Discord Botログイン',
-            () => loginDiscordClient(),
-            { log: console.warn }
-        );
-    } catch (error) {
-        console.error(`❌ Discord起動エラー: ${formatDiscordStartupError(error)}`);
-        process.exit(1);
-    }
-}
 
-startDiscordBot();
+client.login(TOKEN);
