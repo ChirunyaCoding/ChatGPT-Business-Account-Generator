@@ -3,6 +3,39 @@
  * Unknown interaction (10062) is treated as an expected expiration case.
  */
 
+const expiredInteractions = new WeakSet();
+const warnedExpiredInteractions = new WeakSet();
+
+function canTrackInteraction(interaction) {
+    return Boolean(interaction && typeof interaction === 'object');
+}
+
+function isExpiredInteraction(interaction) {
+    return canTrackInteraction(interaction) && expiredInteractions.has(interaction);
+}
+
+function markExpiredInteraction(interaction) {
+    if (!canTrackInteraction(interaction)) {
+        return;
+    }
+
+    expiredInteractions.add(interaction);
+}
+
+function warnExpiredInteractionOnce(interaction, message) {
+    if (!canTrackInteraction(interaction)) {
+        console.warn(message);
+        return;
+    }
+
+    if (warnedExpiredInteractions.has(interaction)) {
+        return;
+    }
+
+    warnedExpiredInteractions.add(interaction);
+    console.warn(message);
+}
+
 function isUnknownInteractionError(error) {
     if (!error || typeof error !== 'object') {
         return false;
@@ -33,6 +66,10 @@ function isAlreadyAcknowledgedInteractionError(error) {
 }
 
 async function safeDeferReply(interaction, payload) {
+    if (isExpiredInteraction(interaction)) {
+        return false;
+    }
+
     if (interaction?.deferred || interaction?.replied) {
         // 既にACK済みのためdeferをスキップして継続する
         return true;
@@ -43,7 +80,8 @@ async function safeDeferReply(interaction, payload) {
         return true;
     } catch (error) {
         if (isUnknownInteractionError(error)) {
-            console.warn('⚠️ 期限切れのInteractionのためdeferReplyをスキップしました (10062)');
+            markExpiredInteraction(interaction);
+            warnExpiredInteractionOnce(interaction, '⚠️ 期限切れのInteractionのためdeferReplyをスキップしました (10062)');
             return false;
         }
         if (isAlreadyAcknowledgedInteractionError(error)) {
@@ -55,12 +93,17 @@ async function safeDeferReply(interaction, payload) {
 }
 
 async function safeEditReply(interaction, payload) {
+    if (isExpiredInteraction(interaction)) {
+        return false;
+    }
+
     try {
         await interaction.editReply(payload);
         return true;
     } catch (error) {
         if (isUnknownInteractionError(error)) {
-            console.warn('⚠️ 期限切れまたは無効化されたInteractionのためeditReplyをスキップしました');
+            markExpiredInteraction(interaction);
+            warnExpiredInteractionOnce(interaction, '⚠️ 期限切れまたは無効化されたInteractionのためeditReplyをスキップしました');
             return false;
         }
         throw error;

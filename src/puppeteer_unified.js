@@ -19,7 +19,10 @@ const {
 const {
     createGeneratorFallbackEmail,
     extractGeneratorEmailAddress,
-    extractGeneratorVerificationCode
+    extractGeneratorApprovedUptimeDays,
+    extractGeneratorVerificationCode,
+    GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS,
+    isGeneratorApprovedUptimeAccepted
 } = require('./utils/generator-email');
 const {
     BUSINESS_SIGNUP_CTA_TEXTS,
@@ -1250,6 +1253,7 @@ class GeneratorEmailClient {
         this.browserType = browserType;
         this.browserPath = browserPath;
         this.email = null;
+        this.mailDays = null;
         this.password = generateRandomPassword();
     }
 
@@ -1265,28 +1269,67 @@ class GeneratorEmailClient {
 
         try {
             let email = null;
+            let uptimeDays = null;
 
             const response = await gotoWithRetry(page, 'https://generator.email/', {
                 waitUntil: 'domcontentloaded',
                 timeout: CREATE_ACCOUNT_TIMING.generatorNavigationTimeoutMs
             }).catch(() => null);
 
-            if (response) {
+            const readGeneratorCandidate = async () => {
                 const html = await page.content().catch(() => '');
-                email = extractGeneratorEmailAddress(html);
-            }
+                const bodyText = await evaluateWithRetry(page, () => document.body?.innerText || '').catch(() => '');
+                return {
+                    email: extractGeneratorEmailAddress(html) || extractGeneratorEmailAddress(bodyText),
+                    uptimeDays: extractGeneratorApprovedUptimeDays(`${html}\n${bodyText}`)
+                };
+            };
 
-            if (!email) {
-                await evaluateWithRetry(page, () => {
+            const generateNewEmail = async () => {
+                const clicked = await evaluateWithRetry(page, () => {
                     const buttons = Array.from(document.querySelectorAll('button.btn-success, button'));
                     const button = buttons.find((candidate) =>
                         (candidate.textContent || '').includes('Generate new e-mail')
                     );
-                    if (button) {
-                        button.click();
+                    if (!button) {
+                        return false;
                     }
-                }).catch(() => null);
+
+                    button.click();
+                    return true;
+                }).catch(() => false);
+
+                if (!clicked) {
+                    await gotoWithRetry(page, 'https://generator.email/', {
+                        waitUntil: 'domcontentloaded',
+                        timeout: CREATE_ACCOUNT_TIMING.generatorNavigationTimeoutMs
+                    }).catch(() => null);
+                }
+
                 await sleep(CREATE_ACCOUNT_TIMING.shortDelayMs);
+            };
+
+            if (response) {
+                const candidate = await readGeneratorCandidate();
+                email = candidate.email;
+                uptimeDays = candidate.uptimeDays;
+            }
+
+            while (
+                email &&
+                !isGeneratorApprovedUptimeAccepted(uptimeDays, GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS)
+            ) {
+                const uptimeLabel = uptimeDays === null ? '不明' : `${uptimeDays}`;
+                console.log(`  ↻ uptime ${uptimeLabel} days のため再生成します (基準: ${GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS}日以上)`);
+                await generateNewEmail();
+
+                const candidate = await readGeneratorCandidate();
+                email = candidate.email;
+                uptimeDays = candidate.uptimeDays;
+            }
+
+            if (!email) {
+                await generateNewEmail();
 
                 await evaluateWithRetry(page, () => {
                     const button = document.querySelector('#copbtn');
@@ -1296,21 +1339,41 @@ class GeneratorEmailClient {
                 }).catch(() => null);
                 await sleep(500);
 
-                const html = await page.content().catch(() => '');
-                email = extractGeneratorEmailAddress(html);
+                const candidate = await readGeneratorCandidate();
+                email = candidate.email;
+                uptimeDays = candidate.uptimeDays;
+
+                while (
+                    email &&
+                    !isGeneratorApprovedUptimeAccepted(uptimeDays, GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS)
+                ) {
+                    const uptimeLabel = uptimeDays === null ? '不明' : `${uptimeDays}`;
+                    console.log(`  ↻ uptime ${uptimeLabel} days のため再生成します (基準: ${GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS}日以上)`);
+                    await generateNewEmail();
+
+                    const regeneratedCandidate = await readGeneratorCandidate();
+                    email = regeneratedCandidate.email;
+                    uptimeDays = regeneratedCandidate.uptimeDays;
+                }
             }
 
             if (!email) {
                 email = createGeneratorFallbackEmail();
                 console.log('  ⚠️ generator.email の自動取得に失敗したため、既知ドメインでフォールバックします');
+            } else if (uptimeDays !== null) {
+                console.log(`  ✅ uptime ${uptimeDays} days のアドレスを採用します`);
             }
 
             this.email = email;
+            this.mailDays = uptimeDays !== null ? String(uptimeDays) : null;
             this.password = generateRandomPassword();
 
             console.log(`  ✅ メールアドレス: ${this.email}`);
+            if (this.mailDays !== null) {
+                console.log(`  📅 MailDays: ${this.mailDays}`);
+            }
             console.log(`  🔑 パスワード: ${this.password}`);
-            return { email: this.email, password: this.password };
+            return { email: this.email, password: this.password, mailDays: this.mailDays };
         } finally {
             await page.close().catch(() => null);
             await browser.close().catch(() => null);
@@ -1718,6 +1781,9 @@ async function signupUnified() {
             const mailClient = new GeneratorEmailClient(browser.type, browser.path);
             const account = await mailClient.createAccount();
             console.log(`   Email: ${account.email}`);
+            if (account.mailDays !== null) {
+                console.log(`   MailDays: ${account.mailDays}`);
+            }
             console.log(`   Pass: ${account.password}`);
             console.log('');
 
@@ -1728,6 +1794,9 @@ async function signupUnified() {
                 console.log(`   使用ブラウザ: ${result.browser}`);
                 console.log(`   Email: ${result.email}`);
                 console.log(`   Password: ${result.password}`);
+                if (result.mailDays !== null) {
+                    console.log(`   MailDays: ${result.mailDays}`);
+                }
                 console.log(`   Name: ${result.name}`);
 
                 return result;

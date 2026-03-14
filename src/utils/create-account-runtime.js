@@ -43,6 +43,7 @@ function parseCreateAccountResult(output = '') {
     const result = {
         email: null,
         password: null,
+        mailDays: null,
         workspace: null,
         browser: null
     };
@@ -55,6 +56,11 @@ function parseCreateAccountResult(output = '') {
     const passwordMatch = output.match(/(?:Password|Pass):\s*(\S+)/i);
     if (passwordMatch) {
         result.password = passwordMatch[1];
+    }
+
+    const mailDaysMatch = output.match(/MailDays:\s*(\d+)/i);
+    if (mailDaysMatch) {
+        result.mailDays = mailDaysMatch[1];
     }
 
     const workspaceMatch = output.match(/Workspace:\s*(\S+)/i);

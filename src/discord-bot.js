@@ -13,6 +13,18 @@ const {
     summarizeCreateAccountFailure
 } = require('./utils/create-account-runtime');
 const {
+    buildCreateAccountProgressDescriptionChunks,
+    buildCreateAccountResultDescriptionChunks
+} = require('./utils/create-account-embed-chunks');
+const {
+    buildCreateAccountLogPrefix,
+    createPrefixedLineLogger
+} = require('./utils/create-account-log-prefix');
+const {
+    ensureDiscordRestToken,
+    isMissingDiscordRestTokenError
+} = require('./utils/discord-rest-token');
+const {
     formatDiscordStartupError,
     retryDiscordStartupStep
 } = require('./utils/discord-startup');
@@ -183,8 +195,28 @@ async function deliverCreateAccountResult(interaction, payload) {
         return false;
     }
 
-    await interaction.channel.send(payload);
-    return true;
+    ensureDiscordRestToken(interaction.client, TOKEN);
+
+    try {
+        await interaction.channel.send(payload);
+        return true;
+    } catch (error) {
+        if (isMissingDiscordRestTokenError(error)) {
+            console.warn('⚠️ Discord RESTトークン未設定のためchannel.sendフォールバックをスキップしました');
+            return false;
+        }
+
+        console.warn(`⚠️ channel.sendフォールバックに失敗しました: ${error.message}`);
+        return false;
+    }
+}
+
+function buildPagedEmbedTitle(baseTitle, pageIndex, totalPages) {
+    if (totalPages <= 1) {
+        return baseTitle;
+    }
+
+    return `${baseTitle} [${pageIndex + 1}/${totalPages}]`;
 }
 
 // コマンド処理
@@ -360,7 +392,9 @@ async function handleCreateAccount(interaction) {
 
                 // ブラウザ指定でスクリプトを実行
                 const result = await runSignupScriptWithBrowser(interaction, customUpdateProgress, browserInfo, {
-                    keepOpen
+                    keepOpen,
+                    accountIndex: index,
+                    totalCount: count
                 });
                 
                 // 完了ステータスに更新
@@ -389,38 +423,23 @@ async function handleCreateAccount(interaction) {
             try {
                 frameIndex = (frameIndex + 1) % loadingFrames.length;
                 const loadingFrame = loadingFrames[frameIndex];
-                
-                let description = '';
-                
-                for (let i = 1; i <= count; i++) {
-                    const status = progressStatus[i];
-                    const filled = Math.floor(status.percent / 10);
-                    const empty = 10 - filled;
-                    
-                    // 絵文字プログレスバー
-                    const progressBar = '🟩'.repeat(filled) + '⬜'.repeat(empty);
-                    
-                    if (status.status === '🔄') {
-                        description += `${loadingFrame} ${status.emoji} #${i}: ${progressBar} ${status.percent}%\n   └ ${status.step}\n\n`;
-                    } else if (status.status === '✅') {
-                        description += `✅ ${status.emoji} #${i}: 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩 100%\n   └ 完了\n\n`;
-                    } else if (status.status === '❌') {
-                        description += `❌ ${status.emoji} #${i}: 🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥 ERROR\n   └ ${status.step}\n\n`;
-                    } else {
-                        description += `⏳ ${status.emoji} #${i}: ⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜ 0%\n   └ 待機中\n\n`;
-                    }
-                }
-                
-                description += `━━━━━━━━━━━━━━━━\n`;
-                description += `✅ 完了: ${results.length}  ⏳ 処理中: ${count - results.length - errors.length}  ❌ エラー: ${errors.length}`;
+                const descriptionChunks = buildCreateAccountProgressDescriptionChunks({
+                    count,
+                    progressStatus,
+                    loadingFrame,
+                    completed,
+                    resultsCount: results.length,
+                    errorsCount: errors.length
+                });
+                const embeds = descriptionChunks.map((description, index) =>
+                    new EmbedBuilder()
+                        .setColor(0x0099FF)
+                        .setTitle(buildPagedEmbedTitle(`🚀 アカウント作成中 (${completed}/${count})`, index, descriptionChunks.length))
+                        .setDescription(description)
+                        .setTimestamp()
+                );
 
-                const embed = new EmbedBuilder()
-                    .setColor(0x0099FF)
-                    .setTitle(`🚀 アカウント作成中 (${completed}/${count})`)
-                    .setDescription(description)
-                    .setTimestamp();
-
-                await safeEditReply(interaction, { content: null, embeds: [embed] }).catch(() => {});
+                await safeEditReply(interaction, { content: null, embeds }).catch(() => {});
             } catch (e) {}
         };
 
@@ -451,53 +470,37 @@ async function handleCreateAccount(interaction) {
         const savedAccounts = saveCreatedAccounts(results.map((result) => ({
             email: result.email,
             password: result.password,
+            mailDays: result.mailDays,
             browser: result.browser,
             source: 'create-account'
         })));
 
         // 最終結果表示
-        const embed = new EmbedBuilder()
-            .setColor(errors.length === 0 ? 0x00FF00 : 0xFFA500)
-            .setTitle(`✅ アカウント作成完了 (${results.length}/${count})`)
-            .setTimestamp();
-
-        // 成功したアカウントを表示
-        if (results.length > 0) {
-            let accountsText = '';
-            results.forEach((result) => {
-                const browserEmoji = result.browser === 'brave' ? '🦁' : '🌐';
-                accountsText += `\n**アカウント ${result.index}** ${browserEmoji}\n`;
-                accountsText += `📧 \`${result.email}\`\n`;
-                accountsText += `🔑 \`${result.password}\`\n`;
-            });
-
-            if (savedAccounts.length > 0) {
-                accountsText += `\n💾 JSON保存: ${savedAccounts.length}件`;
-                savedAccounts.forEach((account) => {
-                    accountsText += `\n・\`${account.name}\``;
-                });
-            }
-
-            if (keepOpen) {
-                accountsText += '\n\n🖥️ keepモードが有効なため、完了後もChromeは開いたままです';
-            }
-            
-            embed.setDescription(accountsText);
-        }
-
-        // エラーがあれば表示
-        if (errors.length > 0) {
-            let errorText = '\n**⚠️ エラー**\n';
-            errors.forEach(e => {
-                const browserEmoji = e.browser === 'brave' ? '🦁' : '🌐';
-                errorText += `アカウント ${e.index} ${browserEmoji}: ${e.error}\n`;
-            });
-            embed.addFields({ name: 'エラー詳細', value: errorText });
-        }
+        const descriptionChunks = buildCreateAccountResultDescriptionChunks({
+            results,
+            savedAccounts,
+            keepOpen,
+            errors
+        });
+        const embeds = descriptionChunks.length > 0
+            ? descriptionChunks.map((description, index) =>
+                new EmbedBuilder()
+                    .setColor(errors.length === 0 ? 0x00FF00 : 0xFFA500)
+                    .setTitle(buildPagedEmbedTitle(`✅ アカウント作成完了 (${results.length}/${count})`, index, descriptionChunks.length))
+                    .setDescription(description)
+                    .setTimestamp()
+            )
+            : [
+                new EmbedBuilder()
+                    .setColor(errors.length === 0 ? 0x00FF00 : 0xFFA500)
+                    .setTitle(`✅ アカウント作成完了 (${results.length}/${count})`)
+                    .setDescription('表示できる結果はありません。')
+                    .setTimestamp()
+            ];
 
         await deliverCreateAccountResult(interaction, {
             content: null,
-            embeds: [embed]
+            embeds
         });
 
     } catch (error) {
@@ -550,11 +553,26 @@ function runSignupScriptWithBrowser(interaction, updateProgress, browserInfo, op
 
         let stdout = '';
         let stderr = '';
+        const logPrefix = buildCreateAccountLogPrefix({
+            accountIndex: options.accountIndex,
+            totalCount: options.totalCount,
+            browserType: browserInfo.type
+        });
+        const stdoutLogger = createPrefixedLineLogger({
+            prefix: logPrefix,
+            writer: (line) => console.log(line)
+        });
+        const stderrLogger = createPrefixedLineLogger({
+            prefix: logPrefix,
+            writer: (line) => console.error(line)
+        });
+
+        console.log(`${logPrefix} 作成処理を開始します`);
 
         child.stdout.on('data', async (data) => {
             const output = data.toString();
             stdout += output;
-            console.log(output);
+            stdoutLogger.push(output);
 
             try {
                 if (output.includes('Step 1:') || output.includes('generator.email')) {
@@ -584,11 +602,14 @@ function runSignupScriptWithBrowser(interaction, updateProgress, browserInfo, op
         });
 
         child.stderr.on('data', (data) => {
-            stderr += data.toString();
-            console.error(data.toString());
+            const output = data.toString();
+            stderr += output;
+            stderrLogger.push(output);
         });
 
         child.on('close', (code, signal) => {
+            stdoutLogger.flush();
+            stderrLogger.flush();
             const result = parseCreateAccountResult(stdout);
 
             if (code === 0 && result.email && result.password) {
@@ -599,6 +620,8 @@ function runSignupScriptWithBrowser(interaction, updateProgress, browserInfo, op
         });
 
         child.on('error', (error) => {
+            stdoutLogger.flush();
+            stderrLogger.flush();
             reject(error);
         });
     });
@@ -686,7 +709,10 @@ async function handleOpenBrowser(interaction) {
 async function handleAccountListCommand(interaction) {
     const subcommand = interaction.options.getSubcommand();
 
-    await interaction.deferReply({ ephemeral: true });
+    const deferred = await safeDeferReply(interaction, { flags: 64 });
+    if (!deferred) {
+        return;
+    }
 
     try {
         if (subcommand === 'list') {
@@ -720,7 +746,7 @@ async function handleAccountListCommand(interaction) {
                 .setDescription(accountList.slice(0, 4000))
                 .setTimestamp();
 
-            await interaction.editReply({ embeds: [embed] });
+            await safeEditReply(interaction, { embeds: [embed] });
             return;
         }
 
@@ -729,18 +755,18 @@ async function handleAccountListCommand(interaction) {
             const removedAccount = removeAccount(name);
 
             if (!removedAccount) {
-                return interaction.editReply({
+                return safeEditReply(interaction, {
                     content: `❌ アカウント「${name}」が見つかりません`
                 });
             }
 
-            await interaction.editReply({
+            await safeEditReply(interaction, {
                 content: `✅ アカウント「${removedAccount.name}」を削除しました\n📧 \`${removedAccount.email}\``
             });
         }
     } catch (error) {
         console.error('❌ account-list コマンドエラー:', error);
-        await interaction.editReply({
+        await safeEditReply(interaction, {
             content: `❌ エラーが発生しました: ${error.message}`
         });
     }

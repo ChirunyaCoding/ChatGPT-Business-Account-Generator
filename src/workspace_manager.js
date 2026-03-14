@@ -5,6 +5,10 @@
 
 const fs = require('fs');
 const path = require('path');
+const {
+    safeLoadJsonFile,
+    writeJsonFileAtomic
+} = require('./utils/json-storage');
 
 const DATA_DIR = path.join(__dirname, '..', '.workspace_data');
 const WORKSPACE_FILE = path.join(DATA_DIR, 'workspaces.json');
@@ -13,19 +17,19 @@ const TICKET_FILE = path.join(DATA_DIR, 'tickets.json');
 const ACCOUNTS_FILE = path.join(__dirname, '..', '.workspace_accounts.json');
 
 function saveAccounts(config) {
-    fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(config, null, 2));
+    writeJsonFileAtomic(ACCOUNTS_FILE, config, { ensureDir: false });
 }
 
 // アカウント設定読み込み
 function loadAccounts() {
-    try {
-        if (fs.existsSync(ACCOUNTS_FILE)) {
-            return JSON.parse(fs.readFileSync(ACCOUNTS_FILE, 'utf8'));
+    return safeLoadJsonFile(
+        ACCOUNTS_FILE,
+        { accounts: [], default_account: null },
+        {
+            label: 'アカウント設定',
+            backupCorruptFile: true
         }
-    } catch (e) {
-        console.error('アカウント設定読み込みエラー:', e.message);
-    }
-    return { accounts: [], default_account: null };
+    );
 }
 
 // アカウント取得
@@ -109,6 +113,7 @@ function saveCreatedAccounts(entries = [], options = {}) {
             name,
             email: entry.email,
             password: entry.password,
+            mail_days: entry.mailDays != null ? String(entry.mailDays) : null,
             createdAt: entry.createdAt || new Date().toISOString(),
             source: entry.source || 'create-account',
             browser: entry.browser || null
@@ -135,20 +140,15 @@ function initDataDir() {
 
 // JSON読み込み（存在しない場合は空配列/オブジェクト）
 function loadJson(filePath, defaultValue = []) {
-    try {
-        if (fs.existsSync(filePath)) {
-            return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-        }
-    } catch (error) {
-        console.error(`❌ JSON読み込みエラー: ${filePath}`, error.message);
-    }
-    return defaultValue;
+    return safeLoadJsonFile(filePath, defaultValue, {
+        label: `JSON(${path.basename(filePath)})`
+    });
 }
 
 // JSON保存
 function saveJson(filePath, data) {
     initDataDir();
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    writeJsonFileAtomic(filePath, data);
 }
 
 // ==================== Workspace管理 ====================

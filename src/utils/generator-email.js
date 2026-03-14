@@ -5,6 +5,7 @@ const GENERATOR_EMAIL_FALLBACK_DOMAINS = [
     'fexpost.com',
     'fexbox.org'
 ];
+const GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS = 600;
 
 function buildGeneratorInboxUrl(email) {
     if (typeof email !== 'string' || email.length === 0) {
@@ -56,6 +57,26 @@ function extractGeneratorVerificationCode(text = '') {
     return null;
 }
 
+function extractGeneratorApprovedUptimeDays(text = '') {
+    if (typeof text !== 'string' || text.length === 0) {
+        return null;
+    }
+
+    const match = text.match(/uptime\s+(\d+)\s+days/i);
+    if (!match) {
+        return null;
+    }
+
+    return Number.parseInt(match[1], 10);
+}
+
+function isGeneratorApprovedUptimeAccepted(
+    uptimeDays,
+    minimumDays = GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS
+) {
+    return Number.isInteger(uptimeDays) && uptimeDays >= minimumDays;
+}
+
 async function waitForGeneratorVerificationCode(options = {}) {
     const email = options.email;
     const page = options.page;
@@ -93,9 +114,12 @@ async function waitForGeneratorVerificationCode(options = {}) {
 
 module.exports = {
     buildGeneratorInboxUrl,
+    GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS,
     GENERATOR_EMAIL_FALLBACK_DOMAINS,
     createGeneratorFallbackEmail,
     extractGeneratorEmailAddress,
+    extractGeneratorApprovedUptimeDays,
     extractGeneratorVerificationCode,
+    isGeneratorApprovedUptimeAccepted,
     waitForGeneratorVerificationCode
 };
