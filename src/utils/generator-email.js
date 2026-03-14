@@ -6,6 +6,7 @@ const GENERATOR_EMAIL_FALLBACK_DOMAINS = [
     'fexbox.org'
 ];
 const GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS = 600;
+const GENERATOR_EMAIL_UNSUPPORTED_RETRY_LIMIT = 10;
 
 function buildGeneratorInboxUrl(email) {
     if (typeof email !== 'string' || email.length === 0) {
@@ -70,11 +71,52 @@ function extractGeneratorApprovedUptimeDays(text = '') {
     return Number.parseInt(match[1], 10);
 }
 
+function isGeneratorApprovedEmailStatus(statusText = '', className = '') {
+    if (typeof statusText !== 'string' || statusText.length === 0) {
+        return false;
+    }
+
+    const normalizedText = statusText.replace(/\s+/g, ' ').trim().toLowerCase();
+    const normalizedClassName = typeof className === 'string'
+        ? className.replace(/\s+/g, ' ').trim().toLowerCase()
+        : '';
+
+    return /^email approved \(uptime \d+ days\)$/.test(normalizedText) &&
+        normalizedClassName.includes('greenclass');
+}
+
+function containsGeneratorUnsupportedEmailStatus(statusText = '', className = '') {
+    if (typeof statusText !== 'string' || statusText.length === 0) {
+        return false;
+    }
+
+    const normalizedText = statusText.replace(/\s+/g, ' ').trim().toLowerCase();
+    const normalizedClassName = typeof className === 'string'
+        ? className.replace(/\s+/g, ' ').trim().toLowerCase()
+        : '';
+
+    if (normalizedText !== 'email not supported') {
+        return false;
+    }
+
+    return normalizedClassName.length === 0 ||
+        normalizedClassName.includes('redclass');
+}
+
 function isGeneratorApprovedUptimeAccepted(
     uptimeDays,
     minimumDays = GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS
 ) {
     return Number.isInteger(uptimeDays) && uptimeDays >= minimumDays;
+}
+
+function shouldRestartGeneratorEmailFlow(
+    unsupportedCount,
+    retryLimit = GENERATOR_EMAIL_UNSUPPORTED_RETRY_LIMIT
+) {
+    return Number.isInteger(unsupportedCount) &&
+        Number.isInteger(retryLimit) &&
+        unsupportedCount >= retryLimit;
 }
 
 async function dismissGeneratorConsentDialog(page) {
@@ -213,14 +255,18 @@ async function waitForGeneratorVerificationCode(options = {}) {
 
 module.exports = {
     buildGeneratorInboxUrl,
+    containsGeneratorUnsupportedEmailStatus,
     dismissGeneratorConsentDialog,
     enableGeneratorConsentGuard,
     GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS,
     GENERATOR_EMAIL_FALLBACK_DOMAINS,
+    GENERATOR_EMAIL_UNSUPPORTED_RETRY_LIMIT,
     createGeneratorFallbackEmail,
     extractGeneratorEmailAddress,
     extractGeneratorApprovedUptimeDays,
     extractGeneratorVerificationCode,
+    isGeneratorApprovedEmailStatus,
     isGeneratorApprovedUptimeAccepted,
+    shouldRestartGeneratorEmailFlow,
     waitForGeneratorVerificationCode
 };

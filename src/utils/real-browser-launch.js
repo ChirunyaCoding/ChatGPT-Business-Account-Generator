@@ -99,6 +99,34 @@ function copyFileIfExists(sourcePath, destinationPath) {
     }
 }
 
+function disableChromeTranslatePreferences(userDataDir) {
+    if (!userDataDir) {
+        return false;
+    }
+
+    const preferencesPath = path.join(userDataDir, 'Default', 'Preferences');
+    if (!fs.existsSync(preferencesPath)) {
+        return false;
+    }
+
+    try {
+        const preferences = JSON.parse(fs.readFileSync(preferencesPath, 'utf8'));
+        preferences.translate = {
+            ...(preferences.translate || {}),
+            enabled: false
+        };
+        preferences.intl = {
+            ...(preferences.intl || {}),
+            accept_languages: 'en-US,en'
+        };
+
+        fs.writeFileSync(preferencesPath, JSON.stringify(preferences, null, 2));
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
+
 function resolveManagedProfileBaseDir(options = {}) {
     const baseDir = options.baseDir;
     const managedRootDirName = options.managedRootDirName || MANAGED_PROFILE_ROOT_DIRNAME;
@@ -158,6 +186,8 @@ function setupRealChromeProfileCopy(options = {}) {
         path.join(realProfilePath, 'Local State'),
         path.join(copiedProfilePath, 'Local State')
     );
+
+    disableChromeTranslatePreferences(copiedProfilePath);
 
     return {
         copiedCount,
@@ -366,6 +396,9 @@ function createBrowserLaunchArguments(options = {}) {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-blink-features=AutomationControlled',
+        '--disable-features=Translate,TranslateUI',
+        '--disable-translate',
+        '--lang=en-US',
         '--no-first-run',
         '--no-default-browser-check',
         ...(typeof debuggingPort === 'number' ? [`--remote-debugging-port=${debuggingPort}`] : []),
@@ -567,6 +600,7 @@ module.exports = {
     createChromeProfileCopyDirName,
     createTemporaryProfilePath,
     detectBrowserPaths,
+    disableChromeTranslatePreferences,
     ensureManagedProfileBaseDir,
     getChromeOnlyBrowserCandidates,
     getPreferredBrowserCandidates,

@@ -17,6 +17,7 @@ const {
     withExecutionContextRetry
 } = require('./utils/create-account-runtime');
 const {
+    containsGeneratorUnsupportedEmailStatus,
     createGeneratorFallbackEmail,
     dismissGeneratorConsentDialog,
     enableGeneratorConsentGuard,
@@ -24,7 +25,10 @@ const {
     extractGeneratorApprovedUptimeDays,
     extractGeneratorVerificationCode,
     GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS,
-    isGeneratorApprovedUptimeAccepted
+    GENERATOR_EMAIL_UNSUPPORTED_RETRY_LIMIT,
+    isGeneratorApprovedEmailStatus,
+    isGeneratorApprovedUptimeAccepted,
+    shouldRestartGeneratorEmailFlow
 } = require('./utils/generator-email');
 const {
     BUSINESS_SIGNUP_CTA_TEXTS,
@@ -1273,11 +1277,65 @@ class GeneratorEmailClient {
         try {
             let email = null;
             let uptimeDays = null;
+            let unsupportedCount = 0;
 
             const response = await gotoWithRetry(page, 'https://generator.email/', {
                 waitUntil: 'domcontentloaded',
                 timeout: CREATE_ACCOUNT_TIMING.generatorNavigationTimeoutMs
             }).catch(() => null);
+
+            const readGeneratorStatusInfo = async () => {
+                return evaluateWithRetry(page, () => {
+                    const statusElement = document.querySelector('#checkdomainset');
+                    if (!statusElement) {
+                        return null;
+                    }
+
+                    return {
+                        text: statusElement.textContent || '',
+                        className: statusElement.className || ''
+                    };
+                }).catch(() => null);
+            };
+
+            const waitForStableGeneratorStatusInfo = async () => {
+                const maxChecks = 6;
+                const stableReadsRequired = 2;
+                const settleDelayMs = Math.max(CREATE_ACCOUNT_TIMING.shortDelayMs, 700);
+                let previousStableKey = null;
+                let stableReads = 0;
+                let latestStatusInfo = null;
+
+                for (let attempt = 1; attempt <= maxChecks; attempt++) {
+                    const statusInfo = await readGeneratorStatusInfo();
+                    latestStatusInfo = statusInfo;
+
+                    const statusText = statusInfo?.text || '';
+                    const statusClassName = statusInfo?.className || '';
+                    const settled =
+                        containsGeneratorUnsupportedEmailStatus(statusText, statusClassName) ||
+                        isGeneratorApprovedEmailStatus(statusText, statusClassName);
+
+                    if (settled) {
+                        const stableKey = `${statusClassName}::${statusText}`;
+                        stableReads = stableKey === previousStableKey ? stableReads + 1 : 1;
+                        previousStableKey = stableKey;
+
+                        if (stableReads >= stableReadsRequired) {
+                            return statusInfo;
+                        }
+                    } else {
+                        previousStableKey = null;
+                        stableReads = 0;
+                    }
+
+                    if (attempt < maxChecks) {
+                        await sleep(settleDelayMs);
+                    }
+                }
+
+                return latestStatusInfo;
+            };
 
             const readGeneratorCandidate = async () => {
                 const removedCount = await dismissGeneratorConsentDialog(page).catch(() => 0);
@@ -1286,11 +1344,15 @@ class GeneratorEmailClient {
                     await sleep(300);
                 }
 
+                const statusInfo = await waitForStableGeneratorStatusInfo();
                 const html = await page.content().catch(() => '');
                 const bodyText = await evaluateWithRetry(page, () => document.body?.innerText || '').catch(() => '');
+                const statusText = statusInfo?.text || '';
+                const statusClassName = statusInfo?.className || '';
                 return {
                     email: extractGeneratorEmailAddress(html) || extractGeneratorEmailAddress(bodyText),
-                    uptimeDays: extractGeneratorApprovedUptimeDays(`${html}\n${bodyText}`)
+                    uptimeDays: extractGeneratorApprovedUptimeDays(statusText || `${html}\n${bodyText}`),
+                    unsupported: containsGeneratorUnsupportedEmailStatus(statusText, statusClassName)
                 };
             };
 
@@ -1324,21 +1386,54 @@ class GeneratorEmailClient {
                 await sleep(CREATE_ACCOUNT_TIMING.shortDelayMs);
             };
 
+            // unsupported と uptime 不足は generator.email 内で再生成し、unsupported 連発時は全体再試行へ戻す。
+            const readAcceptedCandidate = async (candidate) => {
+                let currentCandidate = candidate;
+
+                while (currentCandidate) {
+                    if (currentCandidate.unsupported) {
+                        unsupportedCount += 1;
+                        console.log(
+                            `  ↻ Email not supported のため再生成します (${unsupportedCount}/${GENERATOR_EMAIL_UNSUPPORTED_RETRY_LIMIT})`
+                        );
+
+                        if (shouldRestartGeneratorEmailFlow(unsupportedCount)) {
+                            throw createRetryableSignupError(
+                                'generator.email で Email not supported が続いたため、最初からやり直します',
+                                'UNSUPPORTED_EMAIL'
+                            );
+                        }
+
+                        await generateNewEmail();
+                        currentCandidate = await readGeneratorCandidate();
+                        continue;
+                    }
+
+                    if (
+                        currentCandidate.email &&
+                        !isGeneratorApprovedUptimeAccepted(
+                            currentCandidate.uptimeDays,
+                            GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS
+                        )
+                    ) {
+                        const uptimeLabel =
+                            currentCandidate.uptimeDays === null ? '不明' : `${currentCandidate.uptimeDays}`;
+                        console.log(
+                            `  ↻ uptime ${uptimeLabel} days のため再生成します (基準: ${GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS}日以上)`
+                        );
+                        await generateNewEmail();
+                        currentCandidate = await readGeneratorCandidate();
+                        continue;
+                    }
+
+                    return currentCandidate;
+                }
+
+                return currentCandidate;
+            };
+
             if (response) {
-                const candidate = await readGeneratorCandidate();
-                email = candidate.email;
-                uptimeDays = candidate.uptimeDays;
-            }
-
-            while (
-                email &&
-                !isGeneratorApprovedUptimeAccepted(uptimeDays, GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS)
-            ) {
-                const uptimeLabel = uptimeDays === null ? '不明' : `${uptimeDays}`;
-                console.log(`  ↻ uptime ${uptimeLabel} days のため再生成します (基準: ${GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS}日以上)`);
-                await generateNewEmail();
-
-                const candidate = await readGeneratorCandidate();
+                const candidate = await readAcceptedCandidate(await readGeneratorCandidate());
                 email = candidate.email;
                 uptimeDays = candidate.uptimeDays;
             }
@@ -1354,22 +1449,9 @@ class GeneratorEmailClient {
                 }).catch(() => null);
                 await sleep(500);
 
-                const candidate = await readGeneratorCandidate();
+                const candidate = await readAcceptedCandidate(await readGeneratorCandidate());
                 email = candidate.email;
                 uptimeDays = candidate.uptimeDays;
-
-                while (
-                    email &&
-                    !isGeneratorApprovedUptimeAccepted(uptimeDays, GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS)
-                ) {
-                    const uptimeLabel = uptimeDays === null ? '不明' : `${uptimeDays}`;
-                    console.log(`  ↻ uptime ${uptimeLabel} days のため再生成します (基準: ${GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS}日以上)`);
-                    await generateNewEmail();
-
-                    const regeneratedCandidate = await readGeneratorCandidate();
-                    email = regeneratedCandidate.email;
-                    uptimeDays = regeneratedCandidate.uptimeDays;
-                }
             }
 
             if (!email) {

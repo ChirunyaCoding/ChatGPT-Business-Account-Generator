@@ -1,0 +1,95 @@
+{
+  "accounts": [
+    {
+      "name": "generated-account-20260314-104501Z",
+      "email": "jamenson05@healthsoulger.com",
+      "password": "nvuynF7UzJjH",
+      "mail_days": "817",
+      "createdAt": "2026-03-14T10:45:01.096Z",
+      "source": "create-account",
+      "browser": "chrome"
+    },
+    {
+      "name": "generated-account-20260314-104501Z-2",
+      "email": "cdazht@681mail.com",
+      "password": "hbvBHIn8cNFT",
+      "mail_days": "610",
+      "createdAt": "2026-03-14T10:45:01.096Z",
+      "source": "create-account",
+      "browser": "chrome"
+    },
+    {
+      "name": "generated-account-20260314-104501Z-3",
+      "email": "ddot01@clonemailsieure.com",
+      "password": "o7FbZQAG049C",
+      "mail_days": "817",
+      "createdAt": "2026-03-14T10:45:01.096Z",
+      "source": "create-account",
+      "browser": "chrome"
+    },
+    {
+      "name": "generated-account-20260314-104501Z-4",
+      "email": "justjake54@onlinecmail.com",
+      "password": "oMIcRZVxhJ5j",
+      "mail_days": "817",
+      "createdAt": "2026-03-14T10:45:01.096Z",
+      "source": "create-account",
+      "browser": "chrome"
+    },
+    {
+      "name": "generated-account-20260314-104501Z-5",
+      "email": "phil350@bizisstance.com",
+      "password": "ukiKkuvitoB1",
+      "mail_days": "817",
+      "createdAt": "2026-03-14T10:45:01.096Z",
+      "source": "create-account",
+      "browser": "chrome"
+    },
+    {
+      "name": "generated-account-20260314-113029Z",
+      "email": "knkhays1@linkbm365.com",
+      "password": "lQzKl6TJ4tYr",
+      "mail_days": "731",
+      "createdAt": "2026-03-14T11:30:29.146Z",
+      "source": "create-account",
+      "browser": "chrome"
+    },
+    {
+      "name": "generated-account-20260314-113029Z-2",
+      "email": "sashasheinov@code-gmail.com",
+      "password": "VFkPNxz1FqE1",
+      "mail_days": "817",
+      "createdAt": "2026-03-14T11:30:29.146Z",
+      "source": "create-account",
+      "browser": "chrome"
+    },
+    {
+      "name": "generated-account-20260314-113029Z-3",
+      "email": "larisagolovach@puxa.top",
+      "password": "kBYWbDlNexwZ",
+      "mail_days": "817",
+      "createdAt": "2026-03-14T11:30:29.146Z",
+      "source": "create-account",
+      "browser": "chrome"
+    },
+    {
+      "name": "generated-account-20260314-113029Z-4",
+      "email": "megandihel@681mail.com",
+      "password": "heorASy2s5eg",
+      "mail_days": "610",
+      "createdAt": "2026-03-14T11:30:29.146Z",
+      "source": "create-account",
+      "browser": "chrome"
+    },
+    {
+      "name": "generated-account-20260314-113029Z-5",
+      "email": "acquamarina@flameoflovedegree.com",
+      "password": "dSSTZbDQ6VmH",
+      "mail_days": "817",
+      "createdAt": "2026-03-14T11:30:29.146Z",
+      "source": "create-account",
+      "browser": "chrome"
+    }
+  ],
+  "default_account": "generated-account-20260314-104501Z"
+}
