@@ -12,6 +12,7 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { dismissGeneratorConsentDialog, enableGeneratorConsentGuard } = require('./utils/generator-email');
 
 // ============================================================
 // ユーティリティ
@@ -75,8 +76,10 @@ function generateFrenchAddress() {
 async function createGeneratorEmail(browser) {
     console.log('📧 generator.email でアドレスを生成中...');
     const page = await browser.newPage();
+    await enableGeneratorConsentGuard(page).catch(() => 0);
     try {
         await page.goto('https://generator.email/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await dismissGeneratorConsentDialog(page).catch(() => 0);
         await sleep(2000);
 
         await page.evaluate(() => {
@@ -114,8 +117,10 @@ async function getVerificationCode(browser, email, timeout = 300000) {
     console.log(`  📬 受信箱: ${inboxUrl}`);
 
     const page = await browser.newPage();
+    await enableGeneratorConsentGuard(page).catch(() => 0);
     try {
         await page.goto(inboxUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await dismissGeneratorConsentDialog(page).catch(() => 0);
         await sleep(2000);
 
         const startTime = Date.now();
@@ -129,6 +134,7 @@ async function getVerificationCode(browser, email, timeout = 300000) {
                 const btn = btns.find(b => b.textContent.includes('Refresh'));
                 if (btn) btn.click();
             });
+            await dismissGeneratorConsentDialog(page).catch(() => 0);
             await sleep(3000);
 
             const code = await page.evaluate(() => {

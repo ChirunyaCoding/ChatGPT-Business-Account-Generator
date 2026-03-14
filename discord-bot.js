@@ -13,7 +13,7 @@ const {
     summarizeCreateAccountFailure
 } = require('./utils/create-account-runtime');
 
-require('dotenv').config();
+require('./src/utils/load-env');
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;

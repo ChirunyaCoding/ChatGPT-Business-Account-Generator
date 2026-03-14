@@ -77,6 +77,105 @@ function isGeneratorApprovedUptimeAccepted(
     return Number.isInteger(uptimeDays) && uptimeDays >= minimumDays;
 }
 
+async function dismissGeneratorConsentDialog(page) {
+    if (!page || typeof page.evaluate !== 'function') {
+        return 0;
+    }
+
+    return page.evaluate(() => {
+        const selectors = [
+            '.fc-consent-root',
+            '.fc-dialog-overlay',
+            '.fc-help-dialog-container'
+        ];
+
+        const removed = new Set();
+        selectors.forEach((selector) => {
+            document.querySelectorAll(selector).forEach((element) => {
+                removed.add(element);
+            });
+        });
+
+        removed.forEach((element) => element.remove());
+
+        if (removed.size > 0) {
+            document.documentElement.style.overflow = '';
+            if (document.body) {
+                document.body.style.overflow = '';
+                document.body.style.position = '';
+            }
+        }
+
+        return removed.size;
+    });
+}
+
+async function enableGeneratorConsentGuard(page) {
+    if (!page || typeof page.evaluateOnNewDocument !== 'function') {
+        return 0;
+    }
+
+    await page.evaluateOnNewDocument(() => {
+        const guardKey = '__generatorConsentGuardInstalled';
+        if (window[guardKey]) {
+            return;
+        }
+
+        const selectors = [
+            '.fc-consent-root',
+            '.fc-dialog-overlay',
+            '.fc-help-dialog-container'
+        ];
+
+        const removeConsentDialog = () => {
+            const removed = new Set();
+
+            selectors.forEach((selector) => {
+                document.querySelectorAll(selector).forEach((element) => {
+                    removed.add(element);
+                });
+            });
+
+            removed.forEach((element) => element.remove());
+
+            if (removed.size > 0) {
+                document.documentElement.style.overflow = '';
+                if (document.body) {
+                    document.body.style.overflow = '';
+                    document.body.style.position = '';
+                }
+            }
+        };
+
+        window[guardKey] = true;
+        window.__generatorConsentGuardRun = removeConsentDialog;
+
+        const startObserver = () => {
+            removeConsentDialog();
+
+            const observer = new MutationObserver(() => {
+                removeConsentDialog();
+            });
+
+            observer.observe(document.documentElement, {
+                childList: true,
+                subtree: true
+            });
+
+            window.addEventListener('load', removeConsentDialog);
+            window.setInterval(removeConsentDialog, 1000);
+        };
+
+        if (document.documentElement) {
+            startObserver();
+        } else {
+            document.addEventListener('DOMContentLoaded', startObserver, { once: true });
+        }
+    });
+
+    return dismissGeneratorConsentDialog(page).catch(() => 0);
+}
+
 async function waitForGeneratorVerificationCode(options = {}) {
     const email = options.email;
     const page = options.page;
@@ -114,6 +213,8 @@ async function waitForGeneratorVerificationCode(options = {}) {
 
 module.exports = {
     buildGeneratorInboxUrl,
+    dismissGeneratorConsentDialog,
+    enableGeneratorConsentGuard,
     GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS,
     GENERATOR_EMAIL_FALLBACK_DOMAINS,
     createGeneratorFallbackEmail,

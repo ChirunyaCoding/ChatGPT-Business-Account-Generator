@@ -18,6 +18,8 @@ const {
 } = require('./utils/create-account-runtime');
 const {
     createGeneratorFallbackEmail,
+    dismissGeneratorConsentDialog,
+    enableGeneratorConsentGuard,
     extractGeneratorEmailAddress,
     extractGeneratorApprovedUptimeDays,
     extractGeneratorVerificationCode,
@@ -1266,6 +1268,7 @@ class GeneratorEmailClient {
             profilePrefix: 'create_account_generator'
         });
         const page = await browser.newPage();
+        await enableGeneratorConsentGuard(page).catch(() => 0);
 
         try {
             let email = null;
@@ -1277,6 +1280,12 @@ class GeneratorEmailClient {
             }).catch(() => null);
 
             const readGeneratorCandidate = async () => {
+                const removedCount = await dismissGeneratorConsentDialog(page).catch(() => 0);
+                if (removedCount > 0) {
+                    console.log('  ⚠️ generator.email の同意ダイアログを除去しました');
+                    await sleep(300);
+                }
+
                 const html = await page.content().catch(() => '');
                 const bodyText = await evaluateWithRetry(page, () => document.body?.innerText || '').catch(() => '');
                 return {
@@ -1286,6 +1295,12 @@ class GeneratorEmailClient {
             };
 
             const generateNewEmail = async () => {
+                const removedCount = await dismissGeneratorConsentDialog(page).catch(() => 0);
+                if (removedCount > 0) {
+                    console.log('  ⚠️ generator.email の同意ダイアログを除去しました');
+                    await sleep(300);
+                }
+
                 const clicked = await evaluateWithRetry(page, () => {
                     const buttons = Array.from(document.querySelectorAll('button.btn-success, button'));
                     const button = buttons.find((candidate) =>
@@ -1397,6 +1412,7 @@ class GeneratorEmailClient {
             profilePrefix: 'create_account_inbox'
         });
         const page = await browser.newPage();
+        await enableGeneratorConsentGuard(page).catch(() => 0);
 
         try {
             let attempt = 0;
@@ -1408,6 +1424,11 @@ class GeneratorEmailClient {
                     waitUntil: 'domcontentloaded',
                     timeout: CREATE_ACCOUNT_TIMING.generatorNavigationTimeoutMs
                 }).catch(() => null);
+                const removedCount = await dismissGeneratorConsentDialog(page).catch(() => 0);
+                if (removedCount > 0) {
+                    console.log('  ⚠️ generator.email の同意ダイアログを除去しました');
+                    await sleep(300);
+                }
                 await sleep(randomDelay(2200, 3200));
 
                 const bodyText = await evaluateWithRetry(page, () => document.body?.innerText || '').catch(() => '');

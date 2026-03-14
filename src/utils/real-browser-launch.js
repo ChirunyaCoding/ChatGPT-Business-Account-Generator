@@ -534,6 +534,7 @@ async function launchRealBrowser(puppeteer, options = {}) {
         slowMo,
         timeout,
         protocolTimeout,
+        defaultViewport: null,
         args: createBrowserLaunchArguments(),
         ignoreDefaultArgs: ['--enable-automation']
     };
