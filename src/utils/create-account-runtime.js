@@ -1,6 +1,80 @@
 const DEFAULT_CREATE_ACCOUNT_CHILD_TIMEOUT_MS = 0;
 const MIN_CREATE_ACCOUNT_CHILD_TIMEOUT_MS = 0;
 const DEFAULT_CREATE_ACCOUNT_NETWORK_PROFILE = 'vpn';
+const GENERATOR_SESSION_TIMEOUT_CODE = 'GENERATOR_SESSION_TIMEOUT';
+const CREATE_ACCOUNT_PROGRESS_MARKERS = [
+    {
+        step: 'メールアドレス生成中',
+        percent: 15,
+        matchers: [/Step 1(?:\s*\(Retry \d+\))?:/i]
+    },
+    {
+        step: 'ブラウザ起動中',
+        percent: 30,
+        matchers: [/Step 2(?:\s*\(Retry \d+\))?:/i]
+    },
+    {
+        step: 'メールアドレス入力中',
+        percent: 40,
+        matchers: [
+            /Step 3(?:\s*\(Retry \d+\))?:/i,
+            /Step 4(?:\s*\(Retry \d+\))?:/i
+        ]
+    },
+    {
+        step: 'アカウント作成開始',
+        percent: 45,
+        matchers: [/Step 5(?:\s*\(Retry \d+\))?:/i]
+    },
+    {
+        step: 'パスワード設定中',
+        percent: 55,
+        matchers: [
+            /Step 6(?:\s*\(Retry \d+\))?:/i,
+            /Step 7(?:\s*\(Retry \d+\))?:/i
+        ]
+    },
+    {
+        step: '検証コード待機中',
+        percent: 65,
+        matchers: [/Step 8(?:\s*\(Retry \d+\))?:/i]
+    },
+    {
+        step: '検証コード入力中',
+        percent: 75,
+        matchers: [/Step 9(?:\s*\(Retry \d+\))?:/i]
+    },
+    {
+        step: '検証コード送信中',
+        percent: 80,
+        matchers: [/Step 10(?:\s*\(Retry \d+\))?:/i]
+    },
+    {
+        step: 'プロフィール設定中',
+        percent: 85,
+        matchers: [/Step 11(?:\s*\(Retry \d+\))?:/i]
+    },
+    {
+        step: '生年月日設定中',
+        percent: 90,
+        matchers: [/Step 12(?:\s*\(Retry \d+\))?:/i]
+    },
+    {
+        step: 'アカウント確定中',
+        percent: 95,
+        matchers: [/Step 13(?:\s*\(Retry \d+\))?:/i]
+    },
+    {
+        step: 'オンボーディング処理中',
+        percent: 97,
+        matchers: [/Step 14(?:\s*\(Retry \d+\))?:/i]
+    },
+    {
+        step: '完了！',
+        percent: 100,
+        matchers: [/サインアップ完了/i, /アカウント作成完了/i]
+    }
+];
 
 const CREATE_ACCOUNT_TIMING_PROFILES = {
     standard: {
@@ -74,6 +148,57 @@ function parseCreateAccountResult(output = '') {
     }
 
     return result;
+}
+
+function getLastProgressMatcherIndex(output, matcher) {
+    if (typeof output !== 'string' || output.length === 0 || !(matcher instanceof RegExp)) {
+        return -1;
+    }
+
+    const flags = matcher.flags.includes('g') ? matcher.flags : `${matcher.flags}g`;
+    const regex = new RegExp(matcher.source, flags);
+    let lastIndex = -1;
+
+    for (const match of output.matchAll(regex)) {
+        lastIndex = match.index ?? lastIndex;
+    }
+
+    return lastIndex;
+}
+
+function resolveCreateAccountProgressUpdate(output = '') {
+    if (typeof output !== 'string' || output.length === 0) {
+        return null;
+    }
+
+    let latestMatch = null;
+
+    for (const marker of CREATE_ACCOUNT_PROGRESS_MARKERS) {
+        let markerIndex = -1;
+
+        for (const matcher of marker.matchers) {
+            markerIndex = Math.max(markerIndex, getLastProgressMatcherIndex(output, matcher));
+        }
+
+        if (markerIndex < 0) {
+            continue;
+        }
+
+        if (!latestMatch || markerIndex > latestMatch.index) {
+            latestMatch = {
+                index: markerIndex,
+                step: marker.step,
+                percent: marker.percent
+            };
+        }
+    }
+
+    return latestMatch
+        ? {
+            step: latestMatch.step,
+            percent: latestMatch.percent
+        }
+        : null;
 }
 
 function resolvePuppeteerHeadlessMode(headlessValue) {
@@ -216,6 +341,7 @@ function shouldRetrySignupAttempt(error) {
     return Boolean(
         error &&
         (
+            error.code === GENERATOR_SESSION_TIMEOUT_CODE ||
             error.code === 'UNSUPPORTED_EMAIL' ||
             error.code === 'RETRYABLE_SIGNUP' ||
             error.code === 'TRANSIENT_NAVIGATION'
@@ -290,12 +416,14 @@ module.exports = {
     DEFAULT_CREATE_ACCOUNT_CHILD_TIMEOUT_MS,
     DEFAULT_CREATE_ACCOUNT_NETWORK_PROFILE,
     formatTimeoutLimitLabel,
+    GENERATOR_SESSION_TIMEOUT_CODE,
     isExecutionContextDestroyedError,
     isTransientNavigationError,
     isUnlimitedTimeoutMs,
     MIN_CREATE_ACCOUNT_CHILD_TIMEOUT_MS,
     getCreateAccountTimingProfile,
     parseCreateAccountResult,
+    resolveCreateAccountProgressUpdate,
     resolveCreateAccountChildTimeoutMs,
     resolveCreateAccountNetworkProfile,
     resolveCreateAccountKeepOpen,

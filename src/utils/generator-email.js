@@ -5,6 +5,7 @@ const GENERATOR_EMAIL_FALLBACK_DOMAINS = [
     'fexpost.com',
     'fexbox.org'
 ];
+const GENERATOR_EMAIL_SESSION_TIMEOUT_MS = 120000;
 const GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS = 600;
 const GENERATOR_EMAIL_UNSUPPORTED_RETRY_LIMIT = 10;
 
@@ -117,6 +118,18 @@ function shouldRestartGeneratorEmailFlow(
     return Number.isInteger(unsupportedCount) &&
         Number.isInteger(retryLimit) &&
         unsupportedCount >= retryLimit;
+}
+
+function hasGeneratorSessionTimedOut(
+    startTime,
+    timeoutMs = GENERATOR_EMAIL_SESSION_TIMEOUT_MS,
+    now = Date.now()
+) {
+    return Number.isFinite(startTime) &&
+        Number.isFinite(timeoutMs) &&
+        timeoutMs > 0 &&
+        Number.isFinite(now) &&
+        now - startTime >= timeoutMs;
 }
 
 async function dismissGeneratorConsentDialog(page) {
@@ -260,11 +273,13 @@ module.exports = {
     enableGeneratorConsentGuard,
     GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS,
     GENERATOR_EMAIL_FALLBACK_DOMAINS,
+    GENERATOR_EMAIL_SESSION_TIMEOUT_MS,
     GENERATOR_EMAIL_UNSUPPORTED_RETRY_LIMIT,
     createGeneratorFallbackEmail,
     extractGeneratorEmailAddress,
     extractGeneratorApprovedUptimeDays,
     extractGeneratorVerificationCode,
+    hasGeneratorSessionTimedOut,
     isGeneratorApprovedEmailStatus,
     isGeneratorApprovedUptimeAccepted,
     shouldRestartGeneratorEmailFlow,

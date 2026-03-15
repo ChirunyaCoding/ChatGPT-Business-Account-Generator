@@ -9,6 +9,7 @@ const path = require('path');
 const { safeDeferReply, safeEditReply, isUnknownInteractionError } = require('./utils/discord-interaction');
 const {
     parseCreateAccountResult,
+    resolveCreateAccountProgressUpdate,
     resolveCreateAccountChildTimeoutMs,
     summarizeCreateAccountFailure
 } = require('./utils/create-account-runtime');
@@ -575,26 +576,9 @@ function runSignupScriptWithBrowser(interaction, updateProgress, browserInfo, op
             stdoutLogger.push(output);
 
             try {
-                if (output.includes('Step 1:') || output.includes('generator.email')) {
-                    await updateProgress(interaction, 'メールアドレス生成中', 15);
-                } else if (output.includes('Step 2:') || output.includes('Brave を起動中') || output.includes('Chrome を起動中')) {
-                    await updateProgress(interaction, 'ブラウザ起動中', 30);
-                } else if (output.includes('Step 5:')) {
-                    await updateProgress(interaction, 'アカウント作成開始', 45);
-                } else if (output.includes('Step 6:')) {
-                    await updateProgress(interaction, 'パスワード設定中', 55);
-                } else if (output.includes('Step 8:')) {
-                    await updateProgress(interaction, '検証コード待機中', 65);
-                } else if (output.includes('Step 9:')) {
-                    await updateProgress(interaction, '検証コード入力中', 75);
-                } else if (output.includes('Step 15:')) {
-                    await updateProgress(interaction, 'ワークスペース作成ページへ', 85);
-                } else if (output.includes('Step 16:')) {
-                    await updateProgress(interaction, 'ワークスペース名入力中', 90);
-                } else if (output.includes('Step 17:')) {
-                    await updateProgress(interaction, '送信完了', 95);
-                } else if (output.includes('アカウント作成完了')) {
-                    await updateProgress(interaction, '完了！', 100);
+                const progressUpdate = resolveCreateAccountProgressUpdate(stdout);
+                if (progressUpdate) {
+                    await updateProgress(interaction, progressUpdate.step, progressUpdate.percent);
                 }
             } catch (e) {
                 // 更新エラーは無視

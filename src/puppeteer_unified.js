@@ -8,6 +8,7 @@ const {
     containsUnsupportedEmailError,
     createRetryableSignupError,
     formatTimeoutLimitLabel,
+    GENERATOR_SESSION_TIMEOUT_CODE,
     getCreateAccountTimingProfile,
     isTransientNavigationError,
     isUnlimitedTimeoutMs,
@@ -25,7 +26,9 @@ const {
     extractGeneratorApprovedUptimeDays,
     extractGeneratorVerificationCode,
     GENERATOR_EMAIL_MIN_APPROVED_UPTIME_DAYS,
+    GENERATOR_EMAIL_SESSION_TIMEOUT_MS,
     GENERATOR_EMAIL_UNSUPPORTED_RETRY_LIMIT,
+    hasGeneratorSessionTimedOut,
     isGeneratorApprovedEmailStatus,
     isGeneratorApprovedUptimeAccepted,
     shouldRestartGeneratorEmailFlow
@@ -63,6 +66,14 @@ function randomDelay(min, max) {
 
 function normalizeText(value = '') {
     return value.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function createGeneratorSessionTimeoutError() {
+    const timeoutMinutes = Math.ceil(GENERATOR_EMAIL_SESSION_TIMEOUT_MS / 60000);
+    return createRetryableSignupError(
+        `generator.email に ${timeoutMinutes}分以上滞在したため、ブラウザを閉じて最初からやり直します`,
+        GENERATOR_SESSION_TIMEOUT_CODE
+    );
 }
 
 async function gotoWithRetry(page, url, options) {
@@ -1273,16 +1284,24 @@ class GeneratorEmailClient {
         });
         const page = await browser.newPage();
         await enableGeneratorConsentGuard(page).catch(() => 0);
+        const generatorSessionStartedAt = Date.now();
 
         try {
             let email = null;
             let uptimeDays = null;
             let unsupportedCount = 0;
 
+            const throwIfGeneratorSessionTimedOut = () => {
+                if (hasGeneratorSessionTimedOut(generatorSessionStartedAt, GENERATOR_EMAIL_SESSION_TIMEOUT_MS)) {
+                    throw createGeneratorSessionTimeoutError();
+                }
+            };
+
             const response = await gotoWithRetry(page, 'https://generator.email/', {
                 waitUntil: 'domcontentloaded',
                 timeout: CREATE_ACCOUNT_TIMING.generatorNavigationTimeoutMs
             }).catch(() => null);
+            throwIfGeneratorSessionTimedOut();
 
             const readGeneratorStatusInfo = async () => {
                 return evaluateWithRetry(page, () => {
@@ -1307,6 +1326,7 @@ class GeneratorEmailClient {
                 let latestStatusInfo = null;
 
                 for (let attempt = 1; attempt <= maxChecks; attempt++) {
+                    throwIfGeneratorSessionTimedOut();
                     const statusInfo = await readGeneratorStatusInfo();
                     latestStatusInfo = statusInfo;
 
@@ -1330,6 +1350,7 @@ class GeneratorEmailClient {
                     }
 
                     if (attempt < maxChecks) {
+                        throwIfGeneratorSessionTimedOut();
                         await sleep(settleDelayMs);
                     }
                 }
@@ -1338,6 +1359,7 @@ class GeneratorEmailClient {
             };
 
             const readGeneratorCandidate = async () => {
+                throwIfGeneratorSessionTimedOut();
                 const removedCount = await dismissGeneratorConsentDialog(page).catch(() => 0);
                 if (removedCount > 0) {
                     console.log('  ⚠️ generator.email の同意ダイアログを除去しました');
@@ -1357,6 +1379,7 @@ class GeneratorEmailClient {
             };
 
             const generateNewEmail = async () => {
+                throwIfGeneratorSessionTimedOut();
                 const removedCount = await dismissGeneratorConsentDialog(page).catch(() => 0);
                 if (removedCount > 0) {
                     console.log('  ⚠️ generator.email の同意ダイアログを除去しました');
@@ -1383,7 +1406,9 @@ class GeneratorEmailClient {
                     }).catch(() => null);
                 }
 
+                throwIfGeneratorSessionTimedOut();
                 await sleep(CREATE_ACCOUNT_TIMING.shortDelayMs);
+                throwIfGeneratorSessionTimedOut();
             };
 
             // unsupported と uptime 不足は generator.email 内で再生成し、unsupported 連発時は全体再試行へ戻す。
@@ -1391,6 +1416,7 @@ class GeneratorEmailClient {
                 let currentCandidate = candidate;
 
                 while (currentCandidate) {
+                    throwIfGeneratorSessionTimedOut();
                     if (currentCandidate.unsupported) {
                         unsupportedCount += 1;
                         console.log(
@@ -1433,6 +1459,7 @@ class GeneratorEmailClient {
             };
 
             if (response) {
+                throwIfGeneratorSessionTimedOut();
                 const candidate = await readAcceptedCandidate(await readGeneratorCandidate());
                 email = candidate.email;
                 uptimeDays = candidate.uptimeDays;
@@ -1448,6 +1475,7 @@ class GeneratorEmailClient {
                     }
                 }).catch(() => null);
                 await sleep(500);
+                throwIfGeneratorSessionTimedOut();
 
                 const candidate = await readAcceptedCandidate(await readGeneratorCandidate());
                 email = candidate.email;
@@ -1495,23 +1523,32 @@ class GeneratorEmailClient {
         });
         const page = await browser.newPage();
         await enableGeneratorConsentGuard(page).catch(() => 0);
+        const generatorSessionStartedAt = Date.now();
 
         try {
             let attempt = 0;
+            const throwIfGeneratorSessionTimedOut = () => {
+                if (hasGeneratorSessionTimedOut(generatorSessionStartedAt, GENERATOR_EMAIL_SESSION_TIMEOUT_MS)) {
+                    throw createGeneratorSessionTimeoutError();
+                }
+            };
 
             while (unlimitedWait || Date.now() - startTime < timeout) {
                 attempt += 1;
+                throwIfGeneratorSessionTimedOut();
 
                 await gotoWithRetry(page, inboxUrl, {
                     waitUntil: 'domcontentloaded',
                     timeout: CREATE_ACCOUNT_TIMING.generatorNavigationTimeoutMs
                 }).catch(() => null);
+                throwIfGeneratorSessionTimedOut();
                 const removedCount = await dismissGeneratorConsentDialog(page).catch(() => 0);
                 if (removedCount > 0) {
                     console.log('  ⚠️ generator.email の同意ダイアログを除去しました');
                     await sleep(300);
                 }
                 await sleep(randomDelay(2200, 3200));
+                throwIfGeneratorSessionTimedOut();
 
                 const bodyText = await evaluateWithRetry(page, () => document.body?.innerText || '').catch(() => '');
                 const code = extractGeneratorVerificationCode(bodyText);
@@ -1526,6 +1563,7 @@ class GeneratorEmailClient {
                     console.log(`  ⏳ メール待機中... (${elapsed}秒経過)`);
                 }
 
+                throwIfGeneratorSessionTimedOut();
                 await sleep(interval);
             }
 
@@ -1879,18 +1917,18 @@ async function signupUnified() {
         console.log(`${'='.repeat(50)}\n`);
 
         for (let attempt = 1; attempt <= maxAttemptsPerBrowser; attempt++) {
-            // ブラウザごとに新しい generator.email アカウントを作成
-            console.log('📧 Step 1: generator.email アドレス生成');
-            const mailClient = new GeneratorEmailClient(browser.type, browser.path);
-            const account = await mailClient.createAccount();
-            console.log(`   Email: ${account.email}`);
-            if (account.mailDays !== null) {
-                console.log(`   MailDays: ${account.mailDays}`);
-            }
-            console.log(`   Pass: ${account.password}`);
-            console.log('');
-
             try {
+                // ブラウザごとに新しい generator.email アカウントを作成
+                console.log('📧 Step 1: generator.email アドレス生成');
+                const mailClient = new GeneratorEmailClient(browser.type, browser.path);
+                const account = await mailClient.createAccount();
+                console.log(`   Email: ${account.email}`);
+                if (account.mailDays !== null) {
+                    console.log(`   MailDays: ${account.mailDays}`);
+                }
+                console.log(`   Pass: ${account.password}`);
+                console.log('');
+
                 const result = await signupWithBrowser(browser.type, browser.path, mailClient, account);
 
                 console.log('\n✅ サインアップ完了！');
