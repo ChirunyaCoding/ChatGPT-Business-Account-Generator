@@ -340,8 +340,8 @@ async function handleCreateAccount(interaction) {
 
     const initialEmbed = new EmbedBuilder()
         .setColor(0x0099FF)
-        .setTitle(`🚀 ChatGPTアカウント作成中 (0/${count})`)
-        .setDescription(`⏳ 実行ブラウザ: ${availableBrowsers.map(b => b.emoji).join(' ')} Chrome\n🔒 keepモード: ${keepOpen ? 'ON' : 'OFF'}\n⚡ 最大${Math.min(count, MAX_CONCURRENT_CREATE_ACCOUNT)}件同時に処理します...`)
+        .setTitle('🚀 ChatGPTアカウント作成中')
+        .setDescription(`0/${count} 作成待ち...`)
         .setTimestamp();
 
     const initialReplySent = await safeEditReply(interaction, {
@@ -353,6 +353,7 @@ async function handleCreateAccount(interaction) {
     }
 
     const results = [];
+    const savedAccounts = [];
     const errors = [];
     let completed = 0;
     let animationInterval = null;
@@ -397,6 +398,18 @@ async function handleCreateAccount(interaction) {
                     accountIndex: index,
                     totalCount: count
                 });
+
+                const [savedAccount] = saveCreatedAccounts([{
+                    email: result.email,
+                    password: result.password,
+                    mailDays: result.mailDays,
+                    browser: browserInfo.type,
+                    source: 'create-account'
+                }]);
+
+                if (savedAccount) {
+                    savedAccounts.push(savedAccount);
+                }
                 
                 // 完了ステータスに更新
                 progressStatus[index].status = '✅';
@@ -435,7 +448,7 @@ async function handleCreateAccount(interaction) {
                 const embeds = descriptionChunks.map((description, index) =>
                     new EmbedBuilder()
                         .setColor(0x0099FF)
-                        .setTitle(buildPagedEmbedTitle(`🚀 アカウント作成中 (${completed}/${count})`, index, descriptionChunks.length))
+                        .setTitle(buildPagedEmbedTitle('🚀 ChatGPTアカウント作成中', index, descriptionChunks.length))
                         .setDescription(description)
                         .setTimestamp()
                 );
@@ -468,13 +481,6 @@ async function handleCreateAccount(interaction) {
         // 結果をインデックス順にソート
         results.sort((a, b) => a.index - b.index);
         errors.sort((a, b) => a.index - b.index);
-        const savedAccounts = saveCreatedAccounts(results.map((result) => ({
-            email: result.email,
-            password: result.password,
-            mailDays: result.mailDays,
-            browser: result.browser,
-            source: 'create-account'
-        })));
 
         // 最終結果表示
         const descriptionChunks = buildCreateAccountResultDescriptionChunks({

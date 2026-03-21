@@ -106,43 +106,43 @@ function chunkTextBlocks(blocks, options = {}) {
 function buildCreateAccountProgressDescriptionChunks(options) {
     const count = options.count || 0;
     const progressStatus = options.progressStatus || {};
-    const loadingFrame = options.loadingFrame || '⏳';
+    const completed = Number.isFinite(options.completed)
+        ? Math.max(0, Math.min(count, options.completed))
+        : 0;
     const resultsCount = options.resultsCount || 0;
     const errorsCount = options.errorsCount || 0;
-    const summaryProcessingCount = Math.max(0, count - resultsCount - errorsCount);
-    const blocks = [];
+    let activeIndex = null;
+    let activeStep = '';
 
     for (let index = 1; index <= count; index += 1) {
         const status = progressStatus[index] || {};
-        const percent = Number.isFinite(status.percent) ? Math.max(0, Math.min(100, status.percent)) : 0;
-        const filled = Math.floor(percent / 10);
-        const empty = 10 - filled;
-        const emoji = status.emoji || '🌐';
-        const step = status.step || '待機中';
-
         if (status.status === '🔄') {
-            blocks.push(`${loadingFrame} ${emoji} #${index}: ${'🟩'.repeat(filled)}${'⬜'.repeat(empty)} ${percent}%\n   └ ${step}`);
-            continue;
+            activeIndex = index;
+            activeStep = status.step || '作成中';
+            break;
         }
-
-        if (status.status === '✅') {
-            blocks.push(`✅ ${emoji} #${index}: 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩 100%\n   └ 完了`);
-            continue;
-        }
-
-        if (status.status === '❌') {
-            blocks.push(`❌ ${emoji} #${index}: 🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥 ERROR\n   └ ${step}`);
-            continue;
-        }
-
-        blocks.push(`⏳ ${emoji} #${index}: ⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜ 0%\n   └ 待機中`);
     }
 
-    blocks.push(
-        `━━━━━━━━━━━━━━━━\n✅ 完了: ${resultsCount}  ⏳ 処理中: ${summaryProcessingCount}  ❌ エラー: ${errorsCount}`
-    );
+    const hasActiveTask = activeIndex !== null;
+    const nextIndex = count > 0 ? Math.min(count, completed + 1) : 0;
+    const headline = hasActiveTask
+        ? `${activeIndex}/${count} 作成中...`
+        : completed >= count && count > 0
+            ? `${count}/${count} 集計中...`
+            : completed === 0
+                ? `0/${count} 作成待ち...`
+                : `${nextIndex}/${count} 作成待ち...`;
+    const lines = [headline];
 
-    return chunkTextBlocks(blocks, {
+    if (hasActiveTask && activeStep) {
+        lines.push(`現在: ${activeStep}`);
+    }
+
+    if (resultsCount > 0 || errorsCount > 0) {
+        lines.push(`完了: ${resultsCount}件 / エラー: ${errorsCount}件`);
+    }
+
+    return chunkTextBlocks([lines.join('\n')], {
         maxLength: options.maxLength,
         maxBlocks: options.maxBlocks || MAX_PROGRESS_BLOCKS_PER_EMBED
     });

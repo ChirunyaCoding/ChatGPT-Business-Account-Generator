@@ -1907,16 +1907,16 @@ async function signupUnified() {
         throw new Error('Chrome が見つかりません。Google Chrome をインストールしてください。');
     }
     
-    // 各ブラウザで試行（失敗時は新しいアカウントでリトライ）
+    // 各ブラウザで試行（retryable error は新しいアカウントで継続リトライ）
     let lastError = null;
-    const maxAttemptsPerBrowser = 3;
     
     for (const browser of browsers) {
         console.log(`\n${'='.repeat(50)}`);
         console.log(`🔄 ${browser.type.toUpperCase()} で試行します`);
         console.log(`${'='.repeat(50)}\n`);
 
-        for (let attempt = 1; attempt <= maxAttemptsPerBrowser; attempt++) {
+        let attempt = 1;
+        while (true) {
             try {
                 // ブラウザごとに新しい generator.email アカウントを作成
                 console.log('📧 Step 1: generator.email アドレス生成');
@@ -1946,8 +1946,9 @@ async function signupUnified() {
                 console.error(`\n❌ ${browser.type} で失敗:`, error.message);
                 lastError = error;
 
-                if (shouldRetrySignupAttempt(error) && attempt < maxAttemptsPerBrowser) {
-                    console.log(`⏳ 再試行対象のため、新しいメールでやり直します... (${attempt + 1}/${maxAttemptsPerBrowser})`);
+                if (shouldRetrySignupAttempt(error)) {
+                    console.log(`⏳ 再試行対象のため、新しいメールでやり直します... (${attempt + 1}回目)`);
+                    attempt += 1;
                     await sleep(randomDelay(2200, 3200));
                     continue;
                 }
